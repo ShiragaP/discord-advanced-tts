@@ -6,6 +6,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 import logging
+from typing import Optional
 
 from shared.database import db_manager
 from shared.config import settings
@@ -101,11 +102,14 @@ class TTSCommands(commands.Cog):
         user_pref = await db_manager.get_user_preference(str(interaction.user.id))
         voice_id = user_pref["voice_id"]
         speed = user_pref["speed"]
-        guild_settings = await db_manager.get_guild_settings(str(interaction.guild_id))
         guild_mode = guild_settings.get("tts_mode", settings.DEFAULT_TTS_MODE)
         if guild_mode in ["wavespeed", "cloud"]:
             if not settings.is_user_allowed_wavespeed(interaction.user.name, interaction.user.display_name):
                 guild_mode = "local"
+            else:
+                local_presets = {"female_default", "female_fast", "male_default", "vachana_female", "vachana_male", "pythaitts_default"}
+                if not voice_id or voice_id in local_presets:
+                    voice_id = await db_manager.get_guild_wavespeed_voice(str(interaction.guild_id))
 
         clean_text = normalizer.normalize(text)
         if not clean_text:
@@ -149,11 +153,12 @@ class TTSCommands(commands.Cog):
         if new_mode == "wavespeed":
             wavespeed_count = len(settings.wavespeed_keys_list)
             whitelist_str = ", ".join(f"'{k}'" for k in settings.wavespeed_whitelist_list)
+            guild_voice = await db_manager.get_guild_wavespeed_voice(str(interaction.guild_id))
             desc = (
                 f"☁️ เปลี่ยนโหมดเป็น **WaveSpeed (ElevenLabs v3)** เรียบร้อยแล้ว!\n"
                 f"• โมเดล: `{settings.WAVESPEED_MODEL}`\n"
                 f"• Active API Keys: `{wavespeed_count}` keys (สุ่มคีย์อัตโนมัติทุกครั้ง)\n"
-                f"• เสียงเริ่มต้น: `{settings.WAVESPEED_VOICE_ID}`\n"
+                f"• Voice ID ปัจจุบัน: `{guild_voice}` (เปลี่ยนได้ด้วย `/wavespeed_voice`)\n"
                 f"• สมาชิกที่ไม่มีคำว่า {whitelist_str} ในชื่อจะถูกอ่านด้วย Local TTS อัตโนมัติ"
             )
         else:
@@ -170,12 +175,67 @@ class TTSCommands(commands.Cog):
         )
         await interaction.followup.send(embed=embed)
 
+    @app_commands.command(
+        name="wavespeed_voice",
+        description="เปลี่ยนหรือดูรหัสเสียง WaveSpeed (ElevenLabs Voice ID) ของเซิร์ฟเวอร์แบบทันที"
+    )
+    @app_commands.describe(
+        voice_id="ElevenLabs Voice ID ที่ต้องการ (ปล่อยว่างเพื่อดู Voice ID ปัจจุบัน)"
+    )
+    async def wavespeed_voice(self, interaction: discord.Interaction, voice_id: Optional[str] = None):
+        await interaction.response.defer()
+
+        # Whitelist check
+        if not settings.is_user_allowed_wavespeed(interaction.user.name, interaction.user.display_name):
+            whitelist_str = ", ".join(f"'{k}'" for k in settings.wavespeed_whitelist_list)
+            await interaction.followup.send(
+                f"❌ เฉพาะผู้ใช้ที่มีชื่อ {whitelist_str} เท่านั้นที่สามารถเปลี่ยนเสียง WaveSpeed ได้",
+                ephemeral=True
+            )
+            return
+
+        current_voice = await db_manager.get_guild_wavespeed_voice(str(interaction.guild_id))
+
+        if not voice_id:
+            embed = discord.Embed(
+                title="🎙️ การตั้งค่าเสียง WaveSpeed (ElevenLabs Voice ID)",
+                description=(
+                    f"• **Voice ID ปัจจุบัน:** `{current_voice}`\n"
+                    f"• **โมเดล:** `{settings.WAVESPEED_MODEL}`\n"
+                    f"• **ความเร็วเริ่มต้น:** `{settings.WAVESPEED_DEFAULT_SPEED}x`\n\n"
+                    f"💡 หากต้องการเปลี่ยนเสียง ให้พิมพ์: `/wavespeed_voice [voice_id]`\n"
+                    f"💡 ตัวอย่าง Voice ID ภาษาไทยเริ่มต้น: `{settings.WAVESPEED_VOICE_ID}`"
+                ),
+                color=discord.Color.blue()
+            )
+            await interaction.followup.send(embed=embed)
+            return
+
+        clean_voice_id = voice_id.strip()
+        if len(clean_voice_id) < 3 or len(clean_voice_id) > 60:
+            await interaction.followup.send("❌ Voice ID ต้องมีความยาวระหว่าง 3 ถึง 60 ตัวอักษร", ephemeral=True)
+            return
+
+        await db_manager.set_guild_wavespeed_voice(str(interaction.guild_id), clean_voice_id)
+
+        embed = discord.Embed(
+            title="✅ อัปเดตเสียง WaveSpeed เรียบร้อยแล้ว!",
+            description=(
+                f"• **Voice ID ใหม่:** `{clean_voice_id}`\n"
+                f"• มีผลกับการสังเคราะห์เสียง WaveSpeed ทันที\n"
+                f"• สมาชิกทุกคนในโหมด WaveSpeed จะใช้เสียงนี้โดยอัตโนมัติ"
+            ),
+            color=discord.Color.green()
+        )
+        await interaction.followup.send(embed=embed)
+
     @app_commands.command(name="status", description="ตรวจสอบสถานะการทำงานของบอทและ TTS GPU Engine")
     async def status(self, interaction: discord.Interaction):
         await interaction.response.defer()
 
         guild_settings = await db_manager.get_guild_settings(str(interaction.guild_id))
         queue = queue_manager.get_queue(interaction.guild_id)
+        guild_ws_voice = await db_manager.get_guild_wavespeed_voice(str(interaction.guild_id))
 
         try:
             health = await tts_client.get_health()
@@ -195,6 +255,7 @@ class TTSCommands(commands.Cog):
             value=f"`{guild_settings.get('tts_mode', settings.DEFAULT_TTS_MODE).upper()}`",
             inline=True
         )
+        embed.add_field(name="WaveSpeed Voice", value=f"`{guild_ws_voice}`", inline=True)
         embed.add_field(name="VRAM Status", value=vram_info, inline=False)
         embed.add_field(
             name="Guild Voice Channel",

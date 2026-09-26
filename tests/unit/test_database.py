@@ -55,3 +55,9 @@ async def test_guild_settings_and_pronunciations(temp_db):
     assert await temp_db.get_guild_mode(guild_id) == "wavespeed"
     await temp_db.set_guild_mode(guild_id, "local")
     assert await temp_db.get_guild_mode(guild_id) == "local"
+
+    # Guild wavespeed voice
+    default_ws = await temp_db.get_guild_wavespeed_voice(guild_id)
+    assert default_ws == "zGjIP4SZlMnY9m93k97r"
+    await temp_db.set_guild_wavespeed_voice(guild_id, "custom_voice_abc")
+    assert await temp_db.get_guild_wavespeed_voice(guild_id) == "custom_voice_abc"

@@ -41,6 +41,13 @@ class VoiceCommands(commands.Cog):
                     inline=False
                 )
 
+            guild_ws_voice = await db_manager.get_guild_wavespeed_voice(str(interaction.guild_id))
+            embed.add_field(
+                name="☁️ WaveSpeed AI (ElevenLabs)",
+                value=f"• **Voice ID ปัจจุบัน:** `{guild_ws_voice}`\n• เปลี่ยนเสียงทั้งเซิร์ฟเวอร์ด้วย: `/wavespeed_voice [voice_id]`\n• หรือตั้งค่าเฉพาะตัวคุณด้วย: `/voice [voice_id]`",
+                inline=False
+            )
+
             await interaction.followup.send(embed=embed)
         except Exception as e:
             logger.exception("Failed to fetch voices")
@@ -48,8 +55,8 @@ class VoiceCommands(commands.Cog):
 
     @app_commands.command(name="voice", description="เลือกโปรไฟล์เสียงและความเร็วพูดส่วนตัวของคุณ")
     @app_commands.describe(
-        voice_id="รหัสโปรไฟล์เสียง (ดูได้จาก /voices)",
-        speed="ความเร็วเสียงพูด (0.7 ถึง 1.5, ค่าเริ่มต้น 1.0)"
+        voice_id="รหัสโปรไฟล์เสียง (ดูได้จาก /voices หรือระบุ ElevenLabs Voice ID เมื่อใช้ WaveSpeed)",
+        speed="ความเร็วเสียงพูด (0.5 ถึง 2.0, ค่าเริ่มต้น 1.0)"
     )
     async def voice(self, interaction: discord.Interaction, voice_id: str, speed: float = 1.0):
         if speed < 0.5 or speed > 2.0:
@@ -58,26 +65,30 @@ class VoiceCommands(commands.Cog):
 
         await interaction.response.defer(ephemeral=True)
 
+        clean_voice_id = voice_id.strip()
         try:
             available_voices = await tts_client.get_voices()
-            matched = any(v["id"].lower() == voice_id.lower() for v in available_voices)
+            matched = any(v["id"].lower() == clean_voice_id.lower() for v in available_voices)
+            is_custom_id = 3 <= len(clean_voice_id) <= 60 and all(c.isalnum() or c in "-_" for c in clean_voice_id)
 
-            if not matched:
+            if not matched and not is_custom_id:
                 voice_ids = ", ".join(f"`{v['id']}`" for v in available_voices)
                 await interaction.followup.send(
-                    f"❌ ไม่พบรหัสเสียง `{voice_id}`\nเสียงที่มีให้เลือก: {voice_ids}",
+                    f"❌ ไม่พบรหัสเสียง `{clean_voice_id}`\nเสียง Local ที่มี: {voice_ids}\nหรือใส่ ElevenLabs Voice ID เมื่อใช้ WaveSpeed",
                     ephemeral=True
                 )
                 return
 
+            saved_voice_id = clean_voice_id if (is_custom_id and not matched) else clean_voice_id.lower()
+
             await db_manager.set_user_preference(
                 user_id=str(interaction.user.id),
-                voice_id=voice_id.lower(),
+                voice_id=saved_voice_id,
                 speed=speed
             )
 
             await interaction.followup.send(
-                f"✅ บันทึกการตั้งค่าเสียงของคุณเรียบร้อยแล้ว!\n**เสียง:** `{voice_id}` | **ความเร็ว:** `{speed}x`",
+                f"✅ บันทึกการตั้งค่าเสียงของคุณเรียบร้อยแล้ว!\n**เสียง:** `{saved_voice_id}` | **ความเร็ว:** `{speed}x`",
                 ephemeral=True
             )
         except Exception as e:

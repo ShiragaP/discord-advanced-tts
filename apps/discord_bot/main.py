@@ -204,6 +204,10 @@ async def on_message(message: discord.Message):
     if guild_mode in ["wavespeed", "cloud"]:
         if not settings.is_user_allowed_wavespeed(message.author.name, message.author.display_name):
             guild_mode = "local"
+        else:
+            local_presets = {"female_default", "female_fast", "male_default", "vachana_female", "vachana_male", "pythaitts_default"}
+            if not voice_id or voice_id in local_presets:
+                voice_id = await db_manager.get_guild_wavespeed_voice(str(message.guild.id))
 
     for chunk in chunks:
         try:
