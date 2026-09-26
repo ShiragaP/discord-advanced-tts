@@ -104,17 +104,21 @@ async def on_message(message: discord.Message):
     # Process traditional prefix commands if any
     await bot.process_commands(message)
 
+    # Check if voice client is connected
+    voice_client: discord.VoiceClient = message.guild.voice_client
+    if not voice_client or not voice_client.is_connected():
+        return
+
     # Check if channel is configured for auto-reading
     guild_settings = await db_manager.get_guild_settings(str(message.guild.id))
     active_text_channel = guild_settings.get("active_text_channel_id")
     is_active = guild_settings.get("is_active", 0)
 
-    if not is_active or str(message.channel.id) != str(active_text_channel):
-        return
+    # Read automatically if message is in the bound text channel OR inside the voice channel's text chat
+    is_bound_channel = is_active and (str(message.channel.id) == str(active_text_channel))
+    is_voice_chat = voice_client.channel and (message.channel.id == voice_client.channel.id)
 
-    # Check if voice client is connected
-    voice_client: discord.VoiceClient = message.guild.voice_client
-    if not voice_client or not voice_client.is_connected():
+    if not (is_bound_channel or is_voice_chat):
         return
 
     # Rate limiting per user

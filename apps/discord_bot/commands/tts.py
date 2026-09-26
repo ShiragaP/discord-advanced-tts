@@ -35,10 +35,13 @@ class TTSCommands(commands.Cog):
             await self.player.connect_to_voice(voice_channel)
             await db_manager.set_guild_channel(
                 guild_id=str(interaction.guild_id),
-                text_channel_id=None,
+                text_channel_id=str(interaction.channel_id),
                 voice_channel_id=str(voice_channel.id)
             )
-            await interaction.followup.send(f"🔊 บอทเข้าห้องเสียง **{voice_channel.name}** เรียบร้อยแล้ว!")
+            await interaction.followup.send(
+                f"🔊 บอทเข้าห้องเสียง **{voice_channel.name}** แล้ว!\n"
+                f"📖 กำลังอ่านข้อความจากห้อง {interaction.channel.mention} อัตโนมัติ (พิมพ์ข้อความคุยได้ทันที ไม่ต้องใช้คำสั่ง)"
+            )
         except Exception as e:
             logger.exception("Failed to connect to voice")
             await interaction.followup.send(f"❌ ไม่สามารถเข้าห้องเสียงได้: {e}", ephemeral=True)
