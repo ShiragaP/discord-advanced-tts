@@ -33,3 +33,16 @@ def test_wavespeed_keys_property():
 
     s_empty = Settings(WAVESPEED_API_KEYS="")
     assert s_empty.wavespeed_keys_list == []
+
+
+def test_wavespeed_default_speed_setting():
+    s = Settings(WAVESPEED_DEFAULT_SPEED=0.8)
+    assert s.WAVESPEED_DEFAULT_SPEED == 0.8
+
+
+@pytest.mark.asyncio
+async def test_cloud_tts_adjust_speed_noop_for_1_0():
+    client = CloudTTSClient()
+    dummy_audio = b"dummy_mp3_data"
+    result = await client._adjust_speed(dummy_audio, 1.0)
+    assert result == dummy_audio

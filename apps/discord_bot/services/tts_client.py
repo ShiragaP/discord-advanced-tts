@@ -72,18 +72,24 @@ class TTSClient:
         Supports mode='local' (ThonburianTTS) and mode='cloud' (WaveSpeed / ElevenLabs).
         Returns the absolute Path to the local audio file.
         """
+        # Determine effective speed
+        effective_speed = speed
+        if mode in ["wavespeed", "cloud"]:
+            if effective_speed is None or abs(effective_speed - 1.0) < 0.01:
+                effective_speed = settings.WAVESPEED_DEFAULT_SPEED
+
         # 1. Check audio cache first
-        cached_file = audio_cache.get(text, voice_id, speed, mode=mode)
+        cached_file = audio_cache.get(text, voice_id, effective_speed, mode=mode)
         if cached_file:
-            logger.info("Audio cache hit for '%s' (mode=%s, %s, x%.2f)", text[:20], mode, voice_id, speed)
+            logger.info("Audio cache hit for '%s' (mode=%s, %s, x%.2f)", text[:20], mode, voice_id, effective_speed)
             return cached_file
 
         # 2. Synthesize based on mode
         if mode in ["wavespeed", "cloud"]:
             try:
                 from apps.discord_bot.services.cloud_tts_client import cloud_tts_client
-                audio_bytes, ext = await cloud_tts_client.synthesize(text, voice_id=voice_id, speed=speed)
-                saved_path = audio_cache.put(text, voice_id, speed, audio_bytes, mode=mode, ext=ext)
+                audio_bytes, ext = await cloud_tts_client.synthesize(text, voice_id=voice_id, speed=effective_speed)
+                saved_path = audio_cache.put(text, voice_id, effective_speed, audio_bytes, mode=mode, ext=ext)
                 return saved_path
             except Exception as e:
                 logger.error("Cloud TTS (%s) synthesis failed: %s. Falling back to local TTS...", mode, e)

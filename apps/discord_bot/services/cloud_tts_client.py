@@ -6,7 +6,9 @@ Supports multiple API keys with random selection and automatic failover.
 import aiohttp
 import asyncio
 import logging
+import os
 import random
+import shutil
 from typing import Tuple, Optional, List
 from shared.config import settings
 
@@ -55,8 +57,9 @@ class CloudTTSClient:
             last_err = None
             for key in shuffled_keys:
                 try:
-                    logger.info("Attempting Cloud TTS via WaveSpeed (key ...%s)", key[-6:])
+                    logger.info("Attempting Cloud TTS via WaveSpeed (key ...%s, speed=%.2f)", key[-6:], speed)
                     audio_bytes = await self._synthesize_wavespeed(text, key, voice_id=voice_id)
+                    audio_bytes = await self._adjust_speed(audio_bytes, speed)
                     return audio_bytes, "mp3"
                 except Exception as e:
                     logger.warning("WaveSpeed key ...%s failed: %s. Trying next key...", key[-6:], e)
@@ -73,8 +76,9 @@ class CloudTTSClient:
             last_err = None
             for key in shuffled_keys:
                 try:
-                    logger.info("Attempting Cloud TTS via direct ElevenLabs (key ...%s)", key[-6:])
+                    logger.info("Attempting Cloud TTS via direct ElevenLabs (key ...%s, speed=%.2f)", key[-6:], speed)
                     audio_bytes = await self._synthesize_elevenlabs(text, key, voice_id=voice_id)
+                    audio_bytes = await self._adjust_speed(audio_bytes, speed)
                     return audio_bytes, "mp3"
                 except Exception as e:
                     logger.warning("ElevenLabs key ...%s failed: %s. Trying next key...", key[-6:], e)
@@ -84,6 +88,35 @@ class CloudTTSClient:
                 raise last_err
 
         raise RuntimeError("All cloud TTS keys failed.")
+
+    async def _adjust_speed(self, audio_bytes: bytes, speed: float) -> bytes:
+        if abs(speed - 1.0) < 0.02:
+            return audio_bytes
+
+        ffmpeg_cmd = settings.FFMPEG_PATH
+        if not shutil.which(ffmpeg_cmd):
+            winget_ffmpeg = r"C:\Users\shiraga\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg.Essentials_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-9.0.1-essentials_build\bin\ffmpeg.exe"
+            if os.path.exists(winget_ffmpeg):
+                ffmpeg_cmd = winget_ffmpeg
+
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                ffmpeg_cmd, "-y", "-i", "pipe:0",
+                "-filter:a", f"atempo={speed}",
+                "-f", "mp3", "pipe:1",
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await proc.communicate(input=audio_bytes)
+            if proc.returncode == 0 and len(stdout) > 0:
+                logger.info("Adjusted audio speed to %.2fx using FFmpeg (%d bytes -> %d bytes)", speed, len(audio_bytes), len(stdout))
+                return stdout
+            logger.warning("FFmpeg speed adjustment error: %s", stderr.decode(errors="replace"))
+        except Exception as e:
+            logger.warning("Failed to adjust speed with FFmpeg: %s", e)
+
+        return audio_bytes
 
     async def _synthesize_wavespeed(self, text: str, api_key: str, voice_id: Optional[str] = None) -> bytes:
         session = await self.get_session()

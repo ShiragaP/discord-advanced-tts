@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     WAVESPEED_API_KEYS: str = ""
     WAVESPEED_MODEL: str = "elevenlabs/eleven-v3"
     WAVESPEED_VOICE_ID: str = "zGjIP4SZlMnY9m93k97r"
+    WAVESPEED_DEFAULT_SPEED: float = 0.8
     ELEVENLABS_API_KEYS: str = ""
     ELEVENLABS_VOICE_ID: str = "zGjIP4SZlMnY9m93k97r"
     ELEVENLABS_MODEL_ID: str = "eleven_multilingual_v2"
