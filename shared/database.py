@@ -105,7 +105,7 @@ class DatabaseManager:
         return settings_dict.get("tts_mode", settings.DEFAULT_TTS_MODE)
 
     async def set_guild_mode(self, guild_id: str, mode: str):
-        valid_mode = "cloud" if mode.lower() == "cloud" else "local"
+        valid_mode = "wavespeed" if mode.lower() in ["wavespeed", "cloud"] else "local"
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute(
                 """

@@ -201,6 +201,10 @@ async def on_message(message: discord.Message):
     chunks = normalizer.split_sentences(clean_text, max_chars=guild_settings.get("max_chars", settings.MAX_TEXT_LENGTH))
     queue = queue_manager.get_queue(message.guild.id)
     guild_mode = guild_settings.get("tts_mode", settings.DEFAULT_TTS_MODE)
+    if guild_mode in ["wavespeed", "cloud"]:
+        user_str = f"{message.author.name} {message.author.display_name}".lower()
+        if "peony" not in user_str and "shiraga" not in user_str:
+            guild_mode = "local"
 
     for chunk in chunks:
         try:

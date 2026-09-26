@@ -48,3 +48,10 @@ async def test_guild_settings_and_pronunciations(temp_db):
     await temp_db.set_pronunciation(guild_id, "GG", "จีจี")
     pronunciations = await temp_db.get_guild_pronunciations(guild_id)
     assert pronunciations.get("GG") == "จีจี"
+
+    # Guild mode settings
+    assert await temp_db.get_guild_mode(guild_id) == "local"
+    await temp_db.set_guild_mode(guild_id, "wavespeed")
+    assert await temp_db.get_guild_mode(guild_id) == "wavespeed"
+    await temp_db.set_guild_mode(guild_id, "local")
+    assert await temp_db.get_guild_mode(guild_id) == "local"

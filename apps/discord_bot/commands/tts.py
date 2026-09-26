@@ -103,6 +103,10 @@ class TTSCommands(commands.Cog):
         speed = user_pref["speed"]
         guild_settings = await db_manager.get_guild_settings(str(interaction.guild_id))
         guild_mode = guild_settings.get("tts_mode", settings.DEFAULT_TTS_MODE)
+        if guild_mode in ["wavespeed", "cloud"]:
+            user_str = f"{interaction.user.name} {interaction.user.display_name}".lower()
+            if "peony" not in user_str and "shiraga" not in user_str:
+                guild_mode = "local"
 
         clean_text = normalizer.normalize(text)
         if not clean_text:
@@ -123,25 +127,34 @@ class TTSCommands(commands.Cog):
             logger.exception("Synthesis error during /say")
             await interaction.followup.send(f"❌ ไม่สามารถสร้างเสียงได้: {e}", ephemeral=True)
 
-    @app_commands.command(name="mode", description="เลือกระบบสังเคราะห์เสียง: local (ThonburianTTS) หรือ cloud (ElevenLabs)")
+    @app_commands.command(name="mode", description="เลือกระบบสังเคราะห์เสียง: local (ThonburianTTS) หรือ wavespeed (ElevenLabs)")
     @app_commands.describe(engine="เลือกโหมดสังเคราะห์เสียง")
     @app_commands.choices(engine=[
         app_commands.Choice(name="local - ThonburianTTS (GPU ภายในเครื่อง)", value="local"),
-        app_commands.Choice(name="cloud - ElevenLabs (WaveSpeed Cloud AI)", value="cloud"),
+        app_commands.Choice(name="wavespeed - ElevenLabs (WaveSpeed Cloud AI)", value="wavespeed"),
     ])
     async def mode(self, interaction: discord.Interaction, engine: app_commands.Choice[str]):
         await interaction.response.defer()
         new_mode = engine.value
+
+        user_str = f"{interaction.user.name} {interaction.user.display_name}".lower()
+        if new_mode == "wavespeed" and ("peony" not in user_str and "shiraga" not in user_str):
+            await interaction.followup.send(
+                "❌ เฉพาะผู้ใช้ที่มีชื่อ 'peony' หรือ 'shiraga' เท่านั้นที่สามารถเปิดใช้งานโหมด wavespeed ได้",
+                ephemeral=True
+            )
+            return
+
         await db_manager.set_guild_mode(str(interaction.guild_id), new_mode)
 
-        if new_mode == "cloud":
+        if new_mode == "wavespeed":
             wavespeed_count = len(settings.wavespeed_keys_list)
-            eleven_count = len(settings.elevenlabs_keys_list)
             desc = (
-                f"☁️ เปลี่ยนโหมดเป็น **Cloud (ElevenLabs via WaveSpeed)** เรียบร้อยแล้ว!\n"
+                f"☁️ เปลี่ยนโหมดเป็น **WaveSpeed (ElevenLabs v3)** เรียบร้อยแล้ว!\n"
                 f"• โมเดล: `{settings.WAVESPEED_MODEL}`\n"
-                f"• Active API Keys: `{wavespeed_count + eleven_count}` keys (สุ่มคีย์อัตโนมัติทุกครั้ง)\n"
-                f"• สำรอง: หาก Cloud ขัดข้อง ระบบจะสลับไป Local อัตโนมัติ"
+                f"• Active API Keys: `{wavespeed_count}` keys (สุ่มคีย์อัตโนมัติทุกครั้ง)\n"
+                f"• เสียงเริ่มต้น: `{settings.WAVESPEED_VOICE_ID}`\n"
+                f"• สมาชิกที่ไม่มีคำว่า 'peony' หรือ 'shiraga' ในชื่อจะถูกอ่านด้วย Local TTS อัตโนมัติ"
             )
         else:
             desc = (
@@ -153,7 +166,7 @@ class TTSCommands(commands.Cog):
         embed = discord.Embed(
             title="🎛️ ตั้งค่าโหมดสังเคราะห์เสียง (TTS Mode)",
             description=desc,
-            color=discord.Color.blue() if new_mode == "cloud" else discord.Color.green()
+            color=discord.Color.blue() if new_mode == "wavespeed" else discord.Color.green()
         )
         await interaction.followup.send(embed=embed)
 

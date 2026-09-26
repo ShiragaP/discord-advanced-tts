@@ -79,14 +79,14 @@ class TTSClient:
             return cached_file
 
         # 2. Synthesize based on mode
-        if mode == "cloud":
+        if mode in ["wavespeed", "cloud"]:
             try:
                 from apps.discord_bot.services.cloud_tts_client import cloud_tts_client
                 audio_bytes, ext = await cloud_tts_client.synthesize(text, voice_id=voice_id, speed=speed)
                 saved_path = audio_cache.put(text, voice_id, speed, audio_bytes, mode=mode, ext=ext)
                 return saved_path
             except Exception as e:
-                logger.error("Cloud TTS synthesis failed: %s. Falling back to local TTS...", e)
+                logger.error("Cloud TTS (%s) synthesis failed: %s. Falling back to local TTS...", mode, e)
                 # Fallback to local
                 return await self.synthesize(text, voice_id=voice_id, speed=speed, mode="local")
 

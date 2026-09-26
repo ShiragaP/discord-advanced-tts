@@ -87,7 +87,11 @@ class CloudTTSClient:
 
     async def _synthesize_wavespeed(self, text: str, api_key: str, voice_id: Optional[str] = None) -> bytes:
         session = await self.get_session()
-        target_voice = voice_id or settings.WAVESPEED_VOICE_ID
+        local_presets = {"female_default", "female_fast", "male_default", "vachana_female", "vachana_male", "pythaitts_default"}
+        if not voice_id or voice_id in local_presets:
+            target_voice = settings.WAVESPEED_VOICE_ID
+        else:
+            target_voice = voice_id
 
         url = f"https://api.wavespeed.ai/api/v3/{settings.WAVESPEED_MODEL}"
         headers = {
