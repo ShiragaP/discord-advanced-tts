@@ -73,9 +73,63 @@ async def on_ready():
     logger.info("Logged in as %s (ID: %d)", bot.user.name, bot.user.id)
     activity = discord.Activity(
         type=discord.ActivityType.listening,
-        name="ภาษาไทย | /say /join"
+        name="ภาษาไทย | /join"
     )
     await bot.change_presence(status=discord.Status.online, activity=activity)
+
+    # Instant sync to all guilds so slash commands appear immediately without Discord cache delay
+    for guild in bot.guilds:
+        try:
+            bot.tree.copy_global_to(guild=guild)
+            synced = await bot.tree.sync(guild=guild)
+            logger.info("⚡ Instantly synced %d slash commands to guild '%s' (%d)", len(synced), guild.name, guild.id)
+        except Exception as e:
+            logger.warning("Could not sync to guild %s: %s", guild.name, e)
+
+
+@bot.command(name="sync")
+async def manual_sync(ctx: commands.Context):
+    """Fallback manual sync command: !sync"""
+    try:
+        bot.tree.copy_global_to(guild=ctx.guild)
+        synced = await bot.tree.sync(guild=ctx.guild)
+        await ctx.send(f"⚡ ซิงค์คำสั่ง Slash Commands ({len(synced)} คำสั่ง) เข้าเซิร์ฟเวอร์นี้ทันทีเรียบร้อยแล้ว! ลองพิมพ์ `/join` ได้เลย")
+    except Exception as e:
+        await ctx.send(f"❌ ซิงค์ไม่สำเร็จ: {e}")
+
+
+@bot.command(name="join")
+async def prefix_join(ctx: commands.Context):
+    """Fallback prefix command: !join"""
+    if not ctx.author.voice or not ctx.author.voice.channel:
+        await ctx.send("❌ คุณต้องอยู่ในห้องเสียงก่อนจึงจะเรียกบอทได้")
+        return
+
+    voice_channel = ctx.author.voice.channel
+    try:
+        await voice_player.connect_to_voice(voice_channel)
+        await db_manager.set_guild_channel(
+            guild_id=str(ctx.guild.id),
+            text_channel_id=str(ctx.channel.id),
+            voice_channel_id=str(voice_channel.id)
+        )
+        await ctx.send(
+            f"🔊 บอทเข้าห้องเสียง **{voice_channel.name}** แล้ว!\n"
+            f"📖 กำลังอ่านข้อความจากห้อง {ctx.channel.mention} อัตโนมัติ (พิมพ์คุยได้เลย ไม่ต้องใช้คำสั่ง)"
+        )
+    except Exception as e:
+        await ctx.send(f"❌ ไม่สามารถเข้าห้องเสียงได้: {e}")
+
+
+@bot.command(name="leave")
+async def prefix_leave(ctx: commands.Context):
+    """Fallback prefix command: !leave"""
+    try:
+        await voice_player.disconnect_from_voice(ctx.guild)
+        await db_manager.deactivate_guild(str(ctx.guild.id))
+        await ctx.send("👋 ออกจากห้องเสียงเรียบร้อยแล้ว")
+    except Exception as e:
+        await ctx.send(f"❌ เกิดข้อผิดพลาด: {e}")
 
 
 @bot.event
