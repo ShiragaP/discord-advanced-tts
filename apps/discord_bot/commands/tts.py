@@ -101,6 +101,8 @@ class TTSCommands(commands.Cog):
         user_pref = await db_manager.get_user_preference(str(interaction.user.id))
         voice_id = user_pref["voice_id"]
         speed = user_pref["speed"]
+        guild_settings = await db_manager.get_guild_settings(str(interaction.guild_id))
+        guild_mode = guild_settings.get("tts_mode", settings.DEFAULT_TTS_MODE)
 
         clean_text = normalizer.normalize(text)
         if not clean_text:
@@ -108,7 +110,7 @@ class TTSCommands(commands.Cog):
             return
 
         try:
-            audio_path = await tts_client.synthesize(clean_text, voice_id=voice_id, speed=speed)
+            audio_path = await tts_client.synthesize(clean_text, voice_id=voice_id, speed=speed, mode=guild_mode)
             queue = queue_manager.get_queue(interaction.guild_id)
             await queue.put(AudioQueueItem(
                 audio_path=audio_path,
@@ -120,6 +122,40 @@ class TTSCommands(commands.Cog):
         except Exception as e:
             logger.exception("Synthesis error during /say")
             await interaction.followup.send(f"❌ ไม่สามารถสร้างเสียงได้: {e}", ephemeral=True)
+
+    @app_commands.command(name="mode", description="เลือกระบบสังเคราะห์เสียง: local (ThonburianTTS) หรือ cloud (ElevenLabs)")
+    @app_commands.describe(engine="เลือกโหมดสังเคราะห์เสียง")
+    @app_commands.choices(engine=[
+        app_commands.Choice(name="local - ThonburianTTS (GPU ภายในเครื่อง)", value="local"),
+        app_commands.Choice(name="cloud - ElevenLabs (WaveSpeed Cloud AI)", value="cloud"),
+    ])
+    async def mode(self, interaction: discord.Interaction, engine: app_commands.Choice[str]):
+        await interaction.response.defer()
+        new_mode = engine.value
+        await db_manager.set_guild_mode(str(interaction.guild_id), new_mode)
+
+        if new_mode == "cloud":
+            wavespeed_count = len(settings.wavespeed_keys_list)
+            eleven_count = len(settings.elevenlabs_keys_list)
+            desc = (
+                f"☁️ เปลี่ยนโหมดเป็น **Cloud (ElevenLabs via WaveSpeed)** เรียบร้อยแล้ว!\n"
+                f"• โมเดล: `{settings.WAVESPEED_MODEL}`\n"
+                f"• Active API Keys: `{wavespeed_count + eleven_count}` keys (สุ่มคีย์อัตโนมัติทุกครั้ง)\n"
+                f"• สำรอง: หาก Cloud ขัดข้อง ระบบจะสลับไป Local อัตโนมัติ"
+            )
+        else:
+            desc = (
+                f"🖥️ เปลี่ยนโหมดเป็น **Local (ThonburianTTS F5-TTS)** เรียบร้อยแล้ว!\n"
+                f"• ทำงานบน GPU ภายในเซิร์ฟเวอร์\n"
+                f"• ไม่จำกัดโควต้า / ไม่มีค่าใช้จ่ายภายนอก"
+            )
+
+        embed = discord.Embed(
+            title="🎛️ ตั้งค่าโหมดสังเคราะห์เสียง (TTS Mode)",
+            description=desc,
+            color=discord.Color.blue() if new_mode == "cloud" else discord.Color.green()
+        )
+        await interaction.followup.send(embed=embed)
 
     @app_commands.command(name="status", description="ตรวจสอบสถานะการทำงานของบอทและ TTS GPU Engine")
     async def status(self, interaction: discord.Interaction):
@@ -141,6 +177,11 @@ class TTSCommands(commands.Cog):
             color=discord.Color.green() if "Online" in gpu_status else discord.Color.red()
         )
         embed.add_field(name="TTS Engine", value=gpu_status, inline=True)
+        embed.add_field(
+            name="Active Mode",
+            value=f"`{guild_settings.get('tts_mode', settings.DEFAULT_TTS_MODE).upper()}`",
+            inline=True
+        )
         embed.add_field(name="VRAM Status", value=vram_info, inline=False)
         embed.add_field(
             name="Guild Voice Channel",
@@ -154,6 +195,6 @@ class TTSCommands(commands.Cog):
         )
         embed.add_field(name="Queue Length", value=str(queue.size()), inline=True)
         embed.add_field(name="Currently Playing", value="Yes" if queue.is_playing else "No", inline=True)
-        embed.set_footer(text=f"Port: {settings.TTS_PORT} | Model: {settings.TTS_MODEL_TYPE}")
+        embed.set_footer(text=f"Port: {settings.TTS_PORT} | Local: {settings.TTS_MODEL_TYPE} | Cloud: {settings.WAVESPEED_MODEL}")
 
         await interaction.followup.send(embed=embed)

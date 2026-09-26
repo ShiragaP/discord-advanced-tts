@@ -198,13 +198,13 @@ async def on_message(message: discord.Message):
     if not clean_text:
         return
 
-    # Sentence chunking if message is long
     chunks = normalizer.split_sentences(clean_text, max_chars=guild_settings.get("max_chars", settings.MAX_TEXT_LENGTH))
     queue = queue_manager.get_queue(message.guild.id)
+    guild_mode = guild_settings.get("tts_mode", settings.DEFAULT_TTS_MODE)
 
     for chunk in chunks:
         try:
-            audio_path = await tts_client.synthesize(chunk, voice_id=voice_id, speed=speed)
+            audio_path = await tts_client.synthesize(chunk, voice_id=voice_id, speed=speed, mode=guild_mode)
             await queue.put(AudioQueueItem(
                 audio_path=audio_path,
                 text=chunk,

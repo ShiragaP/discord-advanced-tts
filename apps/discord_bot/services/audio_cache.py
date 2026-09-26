@@ -18,28 +18,28 @@ class AudioCache:
         self.max_size_mb = max_size_mb or settings.CACHE_MAX_SIZE_MB
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-    def _generate_key(self, text: str, voice_id: str, speed: float) -> str:
-        raw_key = f"{text.strip()}:{voice_id}:{speed:.2f}:{settings.TTS_MODEL_TYPE}:v3"
+    def _generate_key(self, text: str, voice_id: str, speed: float, mode: str = "local") -> str:
+        raw_key = f"{text.strip()}:{voice_id}:{speed:.2f}:{mode}:{settings.TTS_MODEL_TYPE}:v3"
         return hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
 
-    def get(self, text: str, voice_id: str, speed: float) -> Optional[Path]:
+    def get(self, text: str, voice_id: str, speed: float, mode: str = "local") -> Optional[Path]:
         if not settings.CACHE_ENABLED:
             return None
 
-        key = self._generate_key(text, voice_id, speed)
-        cache_path = self.cache_dir / f"{key}.wav"
-        if cache_path.exists():
-            # Touch file to update access time for LRU
-            try:
-                cache_path.touch()
-            except Exception:
-                pass
-            return cache_path
+        key = self._generate_key(text, voice_id, speed, mode=mode)
+        for ext in ["wav", "mp3"]:
+            cache_path = self.cache_dir / f"{key}.{ext}"
+            if cache_path.exists():
+                try:
+                    cache_path.touch()
+                except Exception:
+                    pass
+                return cache_path
         return None
 
-    def put(self, text: str, voice_id: str, speed: float, audio_bytes: bytes) -> Path:
-        key = self._generate_key(text, voice_id, speed)
-        cache_path = self.cache_dir / f"{key}.wav"
+    def put(self, text: str, voice_id: str, speed: float, audio_bytes: bytes, mode: str = "local", ext: str = "wav") -> Path:
+        key = self._generate_key(text, voice_id, speed, mode=mode)
+        cache_path = self.cache_dir / f"{key}.{ext}"
 
         # Check size before writing
         self._prune_if_needed(incoming_bytes=len(audio_bytes))
@@ -50,7 +50,7 @@ class AudioCache:
 
     def _prune_if_needed(self, incoming_bytes: int):
         max_bytes = self.max_size_mb * 1024 * 1024
-        files = list(self.cache_dir.glob("*.wav"))
+        files = list(self.cache_dir.glob("*.wav")) + list(self.cache_dir.glob("*.mp3"))
         total_size = sum(f.stat().st_size for f in files)
 
         if total_size + incoming_bytes > max_bytes:

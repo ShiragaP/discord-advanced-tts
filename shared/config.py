@@ -36,8 +36,17 @@ class Settings(BaseSettings):
     # Voice & Audio Defaults
     DEFAULT_VOICE_ID: str = "female_default"
     DEFAULT_SPEED: float = 0.9
+    DEFAULT_TTS_MODE: str = "local"  # "local" or "cloud"
     MAX_TEXT_LENGTH: int = 250
     USER_RATE_LIMIT_SECONDS: float = 2.0
+    
+    # Cloud TTS Providers (WaveSpeed / ElevenLabs)
+    WAVESPEED_API_KEYS: str = ""
+    WAVESPEED_MODEL: str = "elevenlabs/eleven-v3"
+    WAVESPEED_VOICE_ID: str = "zGjIP4SZlMnY9m93k97r"
+    ELEVENLABS_API_KEYS: str = ""
+    ELEVENLABS_VOICE_ID: str = "zGjIP4SZlMnY9m93k97r"
+    ELEVENLABS_MODEL_ID: str = "eleven_multilingual_v2"
     
     # Storage Paths
     DATABASE_PATH: Path = BASE_DIR / "data" / "database" / "dat.db"
@@ -48,6 +57,18 @@ class Settings(BaseSettings):
     
     # Audio & FFmpeg
     FFMPEG_PATH: str = "ffmpeg"
+
+    @property
+    def wavespeed_keys_list(self) -> list[str]:
+        if not self.WAVESPEED_API_KEYS:
+            return []
+        return [k.strip() for k in self.WAVESPEED_API_KEYS.split(",") if k.strip()]
+
+    @property
+    def elevenlabs_keys_list(self) -> list[str]:
+        if not self.ELEVENLABS_API_KEYS:
+            return []
+        return [k.strip() for k in self.ELEVENLABS_API_KEYS.split(",") if k.strip()]
     
     model_config = SettingsConfigDict(
         env_file=str(BASE_DIR / ".env"),

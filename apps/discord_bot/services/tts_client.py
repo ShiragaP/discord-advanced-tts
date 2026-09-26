@@ -60,18 +60,37 @@ class TTSClient:
             data = await resp.json()
             return data.get("voices", [])
 
-    async def synthesize(self, text: str, voice_id: str = "female_default", speed: float = 1.0) -> Path:
+    async def synthesize(
+        self,
+        text: str,
+        voice_id: str = "female_default",
+        speed: float = 1.0,
+        mode: str = "local"
+    ) -> Path:
         """
         Synthesizes speech or retrieves it from cache.
-        Returns the absolute Path to the local WAV file.
+        Supports mode='local' (ThonburianTTS) and mode='cloud' (WaveSpeed / ElevenLabs).
+        Returns the absolute Path to the local audio file.
         """
-        # 1. Check local audio cache first
-        cached_file = audio_cache.get(text, voice_id, speed)
+        # 1. Check audio cache first
+        cached_file = audio_cache.get(text, voice_id, speed, mode=mode)
         if cached_file:
-            logger.info("Audio cache hit for '%s' (%s, x%.2f)", text[:20], voice_id, speed)
+            logger.info("Audio cache hit for '%s' (mode=%s, %s, x%.2f)", text[:20], mode, voice_id, speed)
             return cached_file
 
-        # 2. Call TTS server streaming endpoint
+        # 2. Synthesize based on mode
+        if mode == "cloud":
+            try:
+                from apps.discord_bot.services.cloud_tts_client import cloud_tts_client
+                audio_bytes, ext = await cloud_tts_client.synthesize(text, voice_id=voice_id, speed=speed)
+                saved_path = audio_cache.put(text, voice_id, speed, audio_bytes, mode=mode, ext=ext)
+                return saved_path
+            except Exception as e:
+                logger.error("Cloud TTS synthesis failed: %s. Falling back to local TTS...", e)
+                # Fallback to local
+                return await self.synthesize(text, voice_id=voice_id, speed=speed, mode="local")
+
+        # Local mode: call TTS server streaming endpoint
         session = await self.get_session()
         payload = {
             "text": text,
@@ -88,7 +107,7 @@ class TTSClient:
             audio_bytes = await resp.read()
 
         # 3. Store in audio cache
-        saved_path = audio_cache.put(text, voice_id, speed, audio_bytes)
+        saved_path = audio_cache.put(text, voice_id, speed, audio_bytes, mode=mode, ext="wav")
         return saved_path
 
 
