@@ -45,7 +45,7 @@ class Settings(BaseSettings):
     WAVESPEED_MODEL: str = "elevenlabs/eleven-v3"
     WAVESPEED_VOICE_ID: str = "zGjIP4SZlMnY9m93k97r"
     WAVESPEED_DEFAULT_SPEED: float = 0.8
-    WAVESPEED_WHITELIST: str = "peony,shiraga,misu"
+    WAVESPEED_WHITELIST: str = "peony,shiraga,misu,touru"
     ELEVENLABS_API_KEYS: str = ""
     ELEVENLABS_VOICE_ID: str = "zGjIP4SZlMnY9m93k97r"
     ELEVENLABS_MODEL_ID: str = "eleven_multilingual_v2"
@@ -75,7 +75,7 @@ class Settings(BaseSettings):
     @property
     def wavespeed_whitelist_list(self) -> list[str]:
         if not self.WAVESPEED_WHITELIST:
-            return ["peony", "shiraga", "misu"]
+            return ["peony", "shiraga", "misu", "touru"]
         return [k.strip().lower() for k in self.WAVESPEED_WHITELIST.split(",") if k.strip()]
 
     def is_user_allowed_wavespeed(self, username: str, display_name: str) -> bool:

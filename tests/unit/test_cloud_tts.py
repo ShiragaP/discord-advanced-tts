@@ -9,7 +9,7 @@ from apps.discord_bot.services.cloud_tts_client import CloudTTSClient
 
 
 def test_user_permission_check():
-    s = Settings(WAVESPEED_WHITELIST="peony,shiraga,misu")
+    s = Settings(WAVESPEED_WHITELIST="peony,shiraga,misu,touru")
 
     # Allowed cases
     assert s.is_user_allowed_wavespeed("peony", "Peony") is True
@@ -20,6 +20,8 @@ def test_user_permission_check():
     assert s.is_user_allowed_wavespeed("misu", "Misu") is True
     assert s.is_user_allowed_wavespeed("cat_lover", "MiSu_San") is True
     assert s.is_user_allowed_wavespeed("MISU", "Cute") is True
+    assert s.is_user_allowed_wavespeed("touru", "Touru") is True
+    assert s.is_user_allowed_wavespeed("gamer_touru", "TOURU") is True
 
     # Blocked cases
     assert s.is_user_allowed_wavespeed("alice", "Alice") is False
