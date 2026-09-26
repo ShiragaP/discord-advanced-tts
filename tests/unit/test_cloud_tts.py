@@ -8,23 +8,23 @@ from shared.config import Settings
 from apps.discord_bot.services.cloud_tts_client import CloudTTSClient
 
 
-def check_user_allowed(author_name: str, display_name: str) -> bool:
-    user_str = f"{author_name} {display_name}".lower()
-    return "peony" in user_str or "shiraga" in user_str
-
-
 def test_user_permission_check():
+    s = Settings(WAVESPEED_WHITELIST="peony,shiraga,misu")
+
     # Allowed cases
-    assert check_user_allowed("peony", "Peony") is True
-    assert check_user_allowed("User123", "Peony_V") is True
-    assert check_user_allowed("Shiraga", "Administrator") is True
-    assert check_user_allowed("normal_user", "SHIRAGA") is True
-    assert check_user_allowed("pEoNy", "Random") is True
+    assert s.is_user_allowed_wavespeed("peony", "Peony") is True
+    assert s.is_user_allowed_wavespeed("User123", "Peony_V") is True
+    assert s.is_user_allowed_wavespeed("Shiraga", "Administrator") is True
+    assert s.is_user_allowed_wavespeed("normal_user", "SHIRAGA") is True
+    assert s.is_user_allowed_wavespeed("pEoNy", "Random") is True
+    assert s.is_user_allowed_wavespeed("misu", "Misu") is True
+    assert s.is_user_allowed_wavespeed("cat_lover", "MiSu_San") is True
+    assert s.is_user_allowed_wavespeed("MISU", "Cute") is True
 
     # Blocked cases
-    assert check_user_allowed("alice", "Alice") is False
-    assert check_user_allowed("bob", "Bob") is False
-    assert check_user_allowed("guest_user", "Guest 01") is False
+    assert s.is_user_allowed_wavespeed("alice", "Alice") is False
+    assert s.is_user_allowed_wavespeed("bob", "Bob") is False
+    assert s.is_user_allowed_wavespeed("guest_user", "Guest 01") is False
 
 
 def test_wavespeed_keys_property():

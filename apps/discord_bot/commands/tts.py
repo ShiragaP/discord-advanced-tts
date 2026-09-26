@@ -104,8 +104,7 @@ class TTSCommands(commands.Cog):
         guild_settings = await db_manager.get_guild_settings(str(interaction.guild_id))
         guild_mode = guild_settings.get("tts_mode", settings.DEFAULT_TTS_MODE)
         if guild_mode in ["wavespeed", "cloud"]:
-            user_str = f"{interaction.user.name} {interaction.user.display_name}".lower()
-            if "peony" not in user_str and "shiraga" not in user_str:
+            if not settings.is_user_allowed_wavespeed(interaction.user.name, interaction.user.display_name):
                 guild_mode = "local"
 
         clean_text = normalizer.normalize(text)
@@ -137,10 +136,10 @@ class TTSCommands(commands.Cog):
         await interaction.response.defer()
         new_mode = engine.value
 
-        user_str = f"{interaction.user.name} {interaction.user.display_name}".lower()
-        if new_mode == "wavespeed" and ("peony" not in user_str and "shiraga" not in user_str):
+        if new_mode == "wavespeed" and not settings.is_user_allowed_wavespeed(interaction.user.name, interaction.user.display_name):
+            whitelist_str = ", ".join(f"'{k}'" for k in settings.wavespeed_whitelist_list)
             await interaction.followup.send(
-                "❌ เฉพาะผู้ใช้ที่มีชื่อ 'peony' หรือ 'shiraga' เท่านั้นที่สามารถเปิดใช้งานโหมด wavespeed ได้",
+                f"❌ เฉพาะผู้ใช้ที่มีชื่อ {whitelist_str} เท่านั้นที่สามารถเปิดใช้งานโหมด wavespeed ได้",
                 ephemeral=True
             )
             return
@@ -149,12 +148,13 @@ class TTSCommands(commands.Cog):
 
         if new_mode == "wavespeed":
             wavespeed_count = len(settings.wavespeed_keys_list)
+            whitelist_str = ", ".join(f"'{k}'" for k in settings.wavespeed_whitelist_list)
             desc = (
                 f"☁️ เปลี่ยนโหมดเป็น **WaveSpeed (ElevenLabs v3)** เรียบร้อยแล้ว!\n"
                 f"• โมเดล: `{settings.WAVESPEED_MODEL}`\n"
                 f"• Active API Keys: `{wavespeed_count}` keys (สุ่มคีย์อัตโนมัติทุกครั้ง)\n"
                 f"• เสียงเริ่มต้น: `{settings.WAVESPEED_VOICE_ID}`\n"
-                f"• สมาชิกที่ไม่มีคำว่า 'peony' หรือ 'shiraga' ในชื่อจะถูกอ่านด้วย Local TTS อัตโนมัติ"
+                f"• สมาชิกที่ไม่มีคำว่า {whitelist_str} ในชื่อจะถูกอ่านด้วย Local TTS อัตโนมัติ"
             )
         else:
             desc = (
