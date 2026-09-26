@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Tuple, Optional
 import torch
 import soundfile as sf
+import numpy as np
 
 from flowtts.inference import FlowTTSPipeline, ModelConfig, AudioConfig
 from cached_path import cached_path
