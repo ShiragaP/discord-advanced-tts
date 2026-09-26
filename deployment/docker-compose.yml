@@ -12,11 +12,10 @@ services:
     volumes:
       - ../data:/app/data
       - hf-cache:/root/.cache/huggingface
-    env_file:
-      - ../.env
     environment:
       - TTS_HOST=0.0.0.0
       - TTS_PORT=13300
+      - TTS_API_KEY=${TTS_API_KEY:-}
     deploy:
       resources:
         reservations:
@@ -35,10 +34,10 @@ services:
       - tts-server
     volumes:
       - ../data:/app/data
-    env_file:
-      - ../.env
     environment:
+      - DISCORD_TOKEN=${DISCORD_TOKEN}
       - TTS_API_URL=http://tts-server:13300
+      - TTS_PORT=13300
 
 volumes:
   hf-cache:
