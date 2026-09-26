@@ -16,6 +16,11 @@ services:
       - TTS_HOST=0.0.0.0
       - TTS_PORT=13300
       - TTS_API_KEY=${TTS_API_KEY:-}
+    networks:
+      dat-network:
+        aliases:
+          - tts-server
+          - dat-tts-server
     deploy:
       resources:
         reservations:
@@ -36,8 +41,15 @@ services:
       - ../data:/app/data
     environment:
       - DISCORD_TOKEN=${DISCORD_TOKEN}
-      - TTS_API_URL=http://tts-server:13300
+      - TTS_API_URL=${TTS_API_URL:-http://tts-server:13300}
       - TTS_PORT=13300
+    networks:
+      - dat-network
 
 volumes:
   hf-cache:
+
+networks:
+  dat-network:
+    name: dat-network
+    driver: bridge
