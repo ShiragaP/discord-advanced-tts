@@ -19,7 +19,7 @@ class AudioCache:
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
     def _generate_key(self, text: str, voice_id: str, speed: float) -> str:
-        raw_key = f"{text.strip()}:{voice_id}:{speed:.2f}:{settings.TTS_MODEL_TYPE}"
+        raw_key = f"{text.strip()}:{voice_id}:{speed:.2f}:{settings.TTS_MODEL_TYPE}:v2"
         return hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
 
     def get(self, text: str, voice_id: str, speed: float) -> Optional[Path]:

@@ -62,6 +62,12 @@ class TTSInferenceEngine:
             audio_config=audio_config,
             temp_dir=str(temp_dir),
         )
+        # Ensure model weights and vocoder are in full float32 to prevent half-precision NaN underflow
+        if hasattr(self.pipeline, "model") and hasattr(self.pipeline.model, "ema_model"):
+            self.pipeline.model.ema_model = self.pipeline.model.ema_model.to(torch.float32)
+            if hasattr(self.pipeline.model, "vocoder") and hasattr(self.pipeline.model.vocoder, "to"):
+                self.pipeline.model.vocoder = self.pipeline.model.vocoder.to(torch.float32)
+
         self.is_ready = True
         logger.info("ThonburianTTS model loaded successfully and ready on %s", model_config.device)
 
@@ -126,12 +132,21 @@ class TTSInferenceEngine:
 
             # Read back generated audio
             data, sr = sf.read(output_path, dtype="float32")
+            if np.isnan(data).any():
+                logger.error("Synthesized audio contained NaN! Sanitizing with zeros.")
+                data = np.nan_to_num(data, nan=0.0)
             duration = len(data) / sr
 
             # Normalize audio amplitude to 0.95 for loud, clear speech without clipping
             max_amp = float(np.max(np.abs(data)))
             if max_amp > 0.01:
                 data = (data / max_amp) * 0.95
+
+            # Add lead-in (250ms) and lead-out (350ms) silence so Discord voice buffer opens cleanly without clipping
+            pre_pad = np.zeros(int(sr * 0.25), dtype=np.float32)
+            post_pad = np.zeros(int(sr * 0.35), dtype=np.float32)
+            data = np.concatenate([pre_pad, data, post_pad])
+            duration = len(data) / sr
 
             # Convert to standard 16-bit PCM WAV bytes in memory
             buffer = io.BytesIO()
