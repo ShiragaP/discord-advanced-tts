@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir discord.py pydantic pydantic-settings aiosqlite python-dotenv aiohttp pythainlp
+RUN pip install --no-cache-dir "discord.py[voice]>=2.4.0" PyNaCl pydantic pydantic-settings aiosqlite python-dotenv aiohttp pythainlp
 
 COPY . .
 
