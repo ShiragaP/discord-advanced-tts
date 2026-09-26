@@ -16,5 +16,6 @@ COPY . .
 
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONIOENCODING=utf-8
+ENV PYTHONPATH=/app
 
 CMD ["python", "run_bot.py"]
