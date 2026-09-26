@@ -23,24 +23,37 @@ class TTSCommands(commands.Cog):
         self.bot = bot
         self.player = player
 
-    @app_commands.command(name="join", description="ให้บอทเข้าห้องเสียงที่คุณกำลังอยู่")
-    async def join(self, interaction: discord.Interaction):
-        if not interaction.user.voice or not interaction.user.voice.channel:
-            await interaction.response.send_message("❌ คุณต้องอยู่ในห้องเสียงก่อนจึงจะเรียกบอทได้", ephemeral=True)
+    @app_commands.command(name="join", description="ให้บอทเข้าห้องเสียง")
+    @app_commands.describe(channel="ห้องเสียงที่ต้องการให้บอทเข้า (เว้นว่างไว้เพื่อเข้าห้องที่คุณกำลังอยู่)")
+    async def join(self, interaction: discord.Interaction, channel: Optional[discord.VoiceChannel] = None):
+        target_channel = channel or (interaction.user.voice.channel if interaction.user.voice else None)
+        if not target_channel:
+            # Check if there is an active guild voice channel
+            active_vc_id = (await db_manager.get_guild_settings(str(interaction.guild_id))).get("active_voice_channel_id")
+            if active_vc_id:
+                target_channel = interaction.guild.get_channel(int(active_vc_id))
+            # Or first voice channel with members
+            if not target_channel:
+                for vc in interaction.guild.voice_channels:
+                    if len([m for m in vc.members if not m.bot]) > 0:
+                        target_channel = vc
+                        break
+
+        if not target_channel:
+            await interaction.response.send_message("❌ กรุณาเข้าห้องเสียงก่อน หรือระบุห้องเสียง เช่น `/join channel:#ห้องเสียง`", ephemeral=True)
             return
 
-        voice_channel = interaction.user.voice.channel
         await interaction.response.defer()
 
         try:
-            await self.player.connect_to_voice(voice_channel)
+            await self.player.connect_to_voice(target_channel)
             await db_manager.set_guild_channel(
                 guild_id=str(interaction.guild_id),
                 text_channel_id=str(interaction.channel_id),
-                voice_channel_id=str(voice_channel.id)
+                voice_channel_id=str(target_channel.id)
             )
             await interaction.followup.send(
-                f"🔊 บอทเข้าห้องเสียง **{voice_channel.name}** แล้ว!\n"
+                f"🔊 บอทเข้าห้องเสียง **{target_channel.name}** แล้ว!\n"
                 f"📖 กำลังอ่านข้อความจากห้อง {interaction.channel.mention} อัตโนมัติ (พิมพ์ข้อความคุยได้ทันที ไม่ต้องใช้คำสั่ง)"
             )
         except Exception as e:
@@ -61,11 +74,16 @@ class TTSCommands(commands.Cog):
     @app_commands.describe(channel="ห้องข้อความที่ต้องการให้อ่าน (ค่าเริ่มต้นคือห้องปัจจุบัน)")
     async def listen(self, interaction: discord.Interaction, channel: discord.TextChannel = None):
         target_channel = channel or interaction.channel
-        if not interaction.user.voice or not interaction.user.voice.channel:
-            await interaction.response.send_message("❌ คุณต้องอยู่ในห้องเสียงก่อนจึงจะเปิดระบบอ่านได้", ephemeral=True)
+        voice_channel = interaction.user.voice.channel if interaction.user.voice else None
+        if not voice_channel:
+            active_vc_id = (await db_manager.get_guild_settings(str(interaction.guild_id))).get("active_voice_channel_id")
+            if active_vc_id:
+                voice_channel = interaction.guild.get_channel(int(active_vc_id))
+
+        if not voice_channel:
+            await interaction.response.send_message("❌ กรุณาเข้าห้องเสียงก่อนเพื่อเปิดระบบอ่านข้อความ", ephemeral=True)
             return
 
-        voice_channel = interaction.user.voice.channel
         await interaction.response.defer()
 
         try:
@@ -102,6 +120,7 @@ class TTSCommands(commands.Cog):
         user_pref = await db_manager.get_user_preference(str(interaction.user.id))
         voice_id = user_pref["voice_id"]
         speed = user_pref["speed"]
+        guild_settings = await db_manager.get_guild_settings(str(interaction.guild_id))
         guild_mode = guild_settings.get("tts_mode", settings.DEFAULT_TTS_MODE)
         if guild_mode in ["wavespeed", "cloud"]:
             if not settings.is_user_allowed_wavespeed(interaction.user.name, interaction.user.display_name):
@@ -140,14 +159,6 @@ class TTSCommands(commands.Cog):
         await interaction.response.defer()
         new_mode = engine.value
 
-        if new_mode == "wavespeed" and not settings.is_user_allowed_wavespeed(interaction.user.name, interaction.user.display_name):
-            whitelist_str = ", ".join(f"'{k}'" for k in settings.wavespeed_whitelist_list)
-            await interaction.followup.send(
-                f"❌ เฉพาะผู้ใช้ที่มีชื่อ {whitelist_str} เท่านั้นที่สามารถเปิดใช้งานโหมด wavespeed ได้",
-                ephemeral=True
-            )
-            return
-
         await db_manager.set_guild_mode(str(interaction.guild_id), new_mode)
 
         if new_mode == "wavespeed":
@@ -159,7 +170,7 @@ class TTSCommands(commands.Cog):
                 f"• โมเดล: `{settings.WAVESPEED_MODEL}`\n"
                 f"• Active API Keys: `{wavespeed_count}` keys (สุ่มคีย์อัตโนมัติทุกครั้ง)\n"
                 f"• Voice ID ปัจจุบัน: `{guild_voice}` (เปลี่ยนได้ด้วย `/wavespeed_voice`)\n"
-                f"• สมาชิกที่ไม่มีคำว่า {whitelist_str} ในชื่อจะถูกอ่านด้วย Local TTS อัตโนมัติ"
+                f"• สมาชิกใน Whitelist ({whitelist_str}) จะอ่านด้วย WaveSpeed ส่วนสมาชิกท่านอื่นจะอ่านด้วย Local TTS อัตโนมัติ"
             )
         else:
             desc = (
@@ -184,16 +195,6 @@ class TTSCommands(commands.Cog):
     )
     async def wavespeed_voice(self, interaction: discord.Interaction, voice_id: Optional[str] = None):
         await interaction.response.defer()
-
-        # Whitelist check
-        if not settings.is_user_allowed_wavespeed(interaction.user.name, interaction.user.display_name):
-            whitelist_str = ", ".join(f"'{k}'" for k in settings.wavespeed_whitelist_list)
-            await interaction.followup.send(
-                f"❌ เฉพาะผู้ใช้ที่มีชื่อ {whitelist_str} เท่านั้นที่สามารถเปลี่ยนเสียง WaveSpeed ได้",
-                ephemeral=True
-            )
-            return
-
         current_voice = await db_manager.get_guild_wavespeed_voice(str(interaction.guild_id))
 
         if not voice_id:

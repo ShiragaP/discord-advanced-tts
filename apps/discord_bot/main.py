@@ -99,22 +99,37 @@ async def manual_sync(ctx: commands.Context):
 
 
 @bot.command(name="join")
-async def prefix_join(ctx: commands.Context):
-    """Fallback prefix command: !join"""
-    if not ctx.author.voice or not ctx.author.voice.channel:
-        await ctx.send("❌ คุณต้องอยู่ในห้องเสียงก่อนจึงจะเรียกบอทได้")
+async def prefix_join(ctx: commands.Context, *, channel: str = None):
+    """Fallback prefix command: !join [optional channel name/id]"""
+    target_channel = None
+    if channel:
+        clean_name = channel.strip("<#>").strip()
+        target_channel = discord.utils.get(ctx.guild.voice_channels, name=clean_name)
+        if not target_channel and clean_name.isdigit():
+            target_channel = ctx.guild.get_channel(int(clean_name))
+
+    if not target_channel and ctx.author.voice and ctx.author.voice.channel:
+        target_channel = ctx.author.voice.channel
+
+    if not target_channel:
+        # Check active guild voice channel
+        active_vc_id = (await db_manager.get_guild_settings(str(ctx.guild.id))).get("active_voice_channel_id")
+        if active_vc_id:
+            target_channel = ctx.guild.get_channel(int(active_vc_id))
+
+    if not target_channel:
+        await ctx.send("❌ กรุณาเข้าห้องเสียงก่อน หรือระบุชื่อห้องเสียง เช่น `!join General`")
         return
 
-    voice_channel = ctx.author.voice.channel
     try:
-        await voice_player.connect_to_voice(voice_channel)
+        await voice_player.connect_to_voice(target_channel)
         await db_manager.set_guild_channel(
             guild_id=str(ctx.guild.id),
             text_channel_id=str(ctx.channel.id),
-            voice_channel_id=str(voice_channel.id)
+            voice_channel_id=str(target_channel.id)
         )
         await ctx.send(
-            f"🔊 บอทเข้าห้องเสียง **{voice_channel.name}** แล้ว!\n"
+            f"🔊 บอทเข้าห้องเสียง **{target_channel.name}** แล้ว!\n"
             f"📖 กำลังอ่านข้อความจากห้อง {ctx.channel.mention} อัตโนมัติ (พิมพ์คุยได้เลย ไม่ต้องใช้คำสั่ง)"
         )
     except Exception as e:
@@ -130,6 +145,71 @@ async def prefix_leave(ctx: commands.Context):
         await ctx.send("👋 ออกจากห้องเสียงเรียบร้อยแล้ว")
     except Exception as e:
         await ctx.send(f"❌ เกิดข้อผิดพลาด: {e}")
+
+
+@bot.command(name="mode")
+async def prefix_mode(ctx: commands.Context, new_mode: str = None):
+    """Fallback prefix command: !mode <local|wavespeed>"""
+    if not new_mode:
+        current_mode = await db_manager.get_guild_mode(str(ctx.guild.id))
+        await ctx.send(f"🎛️ โหมดปัจจุบันของเซิร์ฟเวอร์คือ: `{current_mode}`\nพิมพ์ `!mode local` หรือ `!mode wavespeed` เพื่อเปลี่ยนโหมด")
+        return
+
+    mode_val = new_mode.lower().strip()
+    if mode_val not in ["local", "wavespeed"]:
+        await ctx.send("❌ โหมดไม่ถูกต้อง กรุณาเลือก `local` หรือ `wavespeed` เช่น `!mode wavespeed`")
+        return
+
+    await db_manager.set_guild_mode(str(ctx.guild.id), mode_val)
+    if mode_val == "wavespeed":
+        wavespeed_count = len(settings.wavespeed_keys_list)
+        whitelist_str = ", ".join(f"'{k}'" for k in settings.wavespeed_whitelist_list)
+        guild_voice = await db_manager.get_guild_wavespeed_voice(str(ctx.guild.id))
+        await ctx.send(
+            f"☁️ เปลี่ยนโหมดเป็น **WaveSpeed (ElevenLabs v3)** เรียบร้อยแล้ว!\n"
+            f"• Voice ID ปัจจุบัน: `{guild_voice}`\n"
+            f"• สมาชิกใน Whitelist ({whitelist_str}) จะอ่านด้วย WaveSpeed ส่วนสมาชิกท่านอื่นจะอ่านด้วย Local TTS อัตโนมัติ"
+        )
+    else:
+        await ctx.send("🖥️ เปลี่ยนโหมดเป็น **Local (ThonburianTTS F5-TTS)** เรียบร้อยแล้ว!")
+
+
+@bot.command(name="wavespeed_voice")
+async def prefix_wavespeed_voice(ctx: commands.Context, voice_id: str = None):
+    """Fallback prefix command: !wavespeed_voice [voice_id]"""
+    if not voice_id:
+        current_voice = await db_manager.get_guild_wavespeed_voice(str(ctx.guild.id))
+        await ctx.send(f"🎙️ WaveSpeed Voice ID ปัจจุบันคือ: `{current_voice}`\nพิมพ์ `!wavespeed_voice <voice_id>` เพื่อเปลี่ยนเสียง")
+        return
+
+    clean_id = voice_id.strip()
+    if len(clean_id) < 3 or len(clean_id) > 60:
+        await ctx.send("❌ Voice ID ต้องมีความยาวระหว่าง 3 ถึง 60 ตัวอักษร")
+        return
+
+    await db_manager.set_guild_wavespeed_voice(str(ctx.guild.id), clean_id)
+    await ctx.send(f"✅ อัปเดต WaveSpeed Voice ID สำหรับเซิร์ฟเวอร์นี้เป็น `{clean_id}` เรียบร้อยแล้ว!")
+
+
+@bot.command(name="status")
+async def prefix_status(ctx: commands.Context):
+    """Fallback prefix command: !status"""
+    guild_settings = await db_manager.get_guild_settings(str(ctx.guild.id))
+    current_mode = guild_settings.get("tts_mode", settings.DEFAULT_TTS_MODE)
+    guild_ws_voice = await db_manager.get_guild_wavespeed_voice(str(ctx.guild.id))
+    await ctx.send(
+        f"⚡ **DAT System Status**\n"
+        f"• โหมดปัจจุบัน: `{current_mode.upper()}`\n"
+        f"• WaveSpeed Voice: `{guild_ws_voice}`\n"
+        f"• กำลังเชื่อมต่อ: {'Yes' if ctx.guild.voice_client and ctx.guild.voice_client.is_connected() else 'No'}"
+    )
+
+
+@bot.command(name="stop")
+async def prefix_stop(ctx: commands.Context):
+    """Fallback prefix command: !stop"""
+    voice_player.stop_playback(ctx.guild)
+    await ctx.send("⏹️ หยุดเล่นเสียงและล้างคิวเรียบร้อยแล้ว")
 
 
 @bot.event
@@ -157,6 +237,10 @@ async def on_message(message: discord.Message):
 
     # Process traditional prefix commands if any
     await bot.process_commands(message)
+
+    # If message was a command prefix, do not process as TTS text
+    if message.content.startswith(settings.DISCORD_COMMAND_PREFIX):
+        return
 
     # Check if voice client is connected
     voice_client: discord.VoiceClient = message.guild.voice_client
