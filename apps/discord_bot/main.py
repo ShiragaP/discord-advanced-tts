@@ -205,6 +205,96 @@ async def prefix_status(ctx: commands.Context):
     )
 
 
+@bot.command(name="voice")
+async def prefix_voice(ctx: commands.Context, *, args: str = None):
+    """Fallback prefix command: !voice [voice_id] [speed]"""
+    if not args:
+        user_pref = await db_manager.get_user_preference(str(ctx.author.id))
+        await ctx.send(
+            f"🎭 **การตั้งค่าเสียงของคุณ ({ctx.author.display_name})**\n"
+            f"• Voice ID: `{user_pref['voice_id']}`\n"
+            f"• Speed: `{user_pref['speed']}x`\n\n"
+            f"💡 เปลี่ยนเสียง: `!voice <voice_id> [speed]` เช่น `!voice 6UZ6Y6OSl14UA2aOxuMM 0.8`\n"
+            f"💡 ดูรายชื่อเสียง Local: `!voices`"
+        )
+        return
+
+    raw = args.strip()
+    voice_id = None
+    speed = 1.0
+
+    # Support named parameters: voice_id: xxx speed: yyy
+    if "voice_id:" in raw or "speed:" in raw:
+        import re
+        m_voice = re.search(r"voice_id:\s*([^\s]+)", raw)
+        m_speed = re.search(r"speed:\s*([0-9\.]+)", raw)
+        if m_voice:
+            voice_id = m_voice.group(1).strip()
+        if m_speed:
+            try:
+                speed = float(m_speed.group(1))
+            except ValueError:
+                pass
+    else:
+        parts = raw.split()
+        if len(parts) >= 1:
+            voice_id = parts[0].strip()
+        if len(parts) >= 2:
+            try:
+                speed = float(parts[1].strip())
+            except ValueError:
+                speed = 1.0
+
+    if not voice_id:
+        await ctx.send("❌ กรุณาระบุ Voice ID เช่น `!voice 6UZ6Y6OSl14UA2aOxuMM 0.8`")
+        return
+
+    if speed < 0.5 or speed > 2.0:
+        await ctx.send("❌ ความเร็วเสียงต้องอยู่ระหว่าง 0.5 ถึง 2.0")
+        return
+
+    try:
+        available_voices = await tts_client.get_voices()
+        matched = any(v["id"].lower() == voice_id.lower() for v in available_voices)
+        is_custom_id = 3 <= len(voice_id) <= 60 and all(c.isalnum() or c in "-_" for c in voice_id)
+
+        if not matched and not is_custom_id:
+            voice_ids = ", ".join(f"`{v['id']}`" for v in available_voices)
+            await ctx.send(f"❌ ไม่พบรหัสเสียง `{voice_id}`\nเสียงที่มีให้เลือก: {voice_ids}\nหรือใส่ ElevenLabs Voice ID สำหรับโหมด WaveSpeed")
+            return
+
+        saved_voice_id = voice_id if (is_custom_id and not matched) else voice_id.lower()
+        await db_manager.set_user_preference(
+            user_id=str(ctx.author.id),
+            voice_id=saved_voice_id,
+            speed=speed
+        )
+        await ctx.send(f"✅ บันทึกการตั้งค่าเสียงของคุณเรียบร้อยแล้ว!\n**เสียง:** `{saved_voice_id}` | **ความเร็ว:** `{speed}x`")
+    except Exception as e:
+        await ctx.send(f"❌ เกิดข้อผิดพลาดในการบันทึก: {e}")
+
+
+@bot.command(name="voices")
+async def prefix_voices(ctx: commands.Context):
+    """Fallback prefix command: !voices"""
+    try:
+        voice_list = await tts_client.get_voices()
+        lines = ["🎭 **รายชื่อโปรไฟล์เสียงพูด (Voice Profiles)**"]
+        for v in voice_list:
+            default_tag = " ⭐ (Default)" if v.get("is_default") else ""
+            lines.append(f"• `{v['id']}` — {v['name']}{default_tag} ({v.get('description', '-')})")
+
+        guild_ws_voice = await db_manager.get_guild_wavespeed_voice(str(ctx.guild.id))
+        lines.append(f"\n☁️ **WaveSpeed AI (ElevenLabs)**")
+        lines.append(f"• Voice ID ปัจจุบันของเซิร์ฟเวอร์: `{guild_ws_voice}`")
+        lines.append(f"• เปลี่ยนเสียงส่วนตัว: `!voice <voice_id> [speed]`")
+        lines.append(f"• เปลี่ยนเสียงทั้งเซิร์ฟเวอร์: `!wavespeed_voice <voice_id>`")
+
+        await ctx.send("\n".join(lines))
+    except Exception as e:
+        await ctx.send(f"❌ ไม่สามารถดึงรายชื่อเสียงได้: {e}")
+
+
 @bot.command(name="stop")
 async def prefix_stop(ctx: commands.Context):
     """Fallback prefix command: !stop"""
