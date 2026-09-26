@@ -89,24 +89,37 @@ class ThaiTextNormalizer:
         for pattern, replacement in self.slang_dict.items():
             text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
 
-        # 8. Collapse whitespace
-        text = re.sub(r"\s+", " ", text).strip()
+        # 8. Collapse horizontal whitespace but preserve newlines
+        text = re.sub(r"[^\S\r\n]+", " ", text)
+        text = re.sub(r"\n+", "\n", text).strip()
 
         return text
 
     def _strip_unsupported_symbols(self, text: str) -> str:
-        """Keep Thai characters, standard English letters, numbers, and basic punctuation."""
-        # Allowed chars: Thai \u0E00-\u0E7F, ASCII alphanum, whitespace, basic symbols
-        allowed_pattern = re.compile(r"[^\u0E00-\u0E7F\w\s.,!?'\"%+-]")
+        """Keep Thai characters, standard English letters, numbers, basic punctuation, and emotion brackets."""
+        # Allowed chars: Thai \u0E00-\u0E7F, ASCII alphanum, whitespace, newlines, basic symbols, brackets, parentheses
+        allowed_pattern = re.compile(r"[^\u0E00-\u0E7F\w\s.,!?'\"%+\-\[\]()~]")
         return allowed_pattern.sub(" ", text)
 
     def split_sentences(self, text: str, max_chars: int = 150) -> List[str]:
         """
         Split long text into sentence chunks within max_chars limit.
+        Preserves paragraph and emotion tag boundaries.
         Uses PyThaiNLP for word / sentence boundary where appropriate.
         """
+        if not text:
+            return []
+
+        # If text contains newlines, process each paragraph separately to preserve emotion tag context
+        if "\n" in text:
+            paragraphs = [p.strip() for p in text.split("\n") if p.strip()]
+            all_chunks: List[str] = []
+            for p in paragraphs:
+                all_chunks.extend(self.split_sentences(p, max_chars=max_chars))
+            return all_chunks
+
         if len(text) <= max_chars:
-            return [text] if text else []
+            return [text]
 
         try:
             from pythainlp.tokenize import sent_tokenize

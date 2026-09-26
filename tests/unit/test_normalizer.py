@@ -52,3 +52,15 @@ def test_sentence_chunking(normalizer):
     assert len(chunks) > 1
     for c in chunks:
         assert len(c) <= 60  # Allow small word boundary padding
+
+
+def test_emotion_tags_preservation(normalizer):
+    text = "[calm] สวัสดีครับทุกคน\n[whispers] อย่าบอกใครนะ"
+    normalized = normalizer.normalize(text)
+    assert "[calm]" in normalized
+    assert "[whispers]" in normalized
+
+    chunks = normalizer.split_sentences(normalized, max_chars=100)
+    assert len(chunks) == 2
+    assert chunks[0].startswith("[calm]")
+    assert chunks[1].startswith("[whispers]")
