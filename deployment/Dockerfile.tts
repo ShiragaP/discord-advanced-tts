@@ -1,0 +1,29 @@
+# Dockerfile for DAT TTS Server (GPU Accelerated)
+FROM pytorch/pytorch:2.4.0-cuda12.4-cudnn9-runtime
+
+WORKDIR /app
+
+# Install system dependencies & ffmpeg
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    git \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy source code
+COPY . .
+
+# Expose default port
+EXPOSE 13300
+
+# Set environment
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONIOENCODING=utf-8
+ENV TTS_HOST=0.0.0.0
+ENV TTS_PORT=13300
+
+CMD ["python", "run_tts.py"]

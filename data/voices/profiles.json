@@ -1,0 +1,24 @@
+[
+  {
+    "id": "female_default",
+    "name": "ฟ้าใส (Fahsai - Female)",
+    "gender": "female",
+    "description": "เสียงผู้หญิงไทย นุ่มนวล ชัดเจน เป็นธรรมชาติ (Default)",
+    "ref_audio_path": "data/voices/samples/default_female.wav",
+    "ref_text": "ใครเป็นผู้รับ",
+    "default_speed": 1.0,
+    "is_default": true,
+    "is_approved": true
+  },
+  {
+    "id": "female_fast",
+    "name": "รินรดา (Rinrada - Fast Female)",
+    "gender": "female",
+    "description": "เสียงผู้หญิงไทย จังหวะกระชับ เหมาะกับเกมเพลย์",
+    "ref_audio_path": "data/voices/samples/default_female.wav",
+    "ref_text": "ใครเป็นผู้รับ",
+    "default_speed": 1.15,
+    "is_default": false,
+    "is_approved": true
+  }
+]

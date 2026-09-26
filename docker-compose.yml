@@ -1,0 +1,44 @@
+version: "3.8"
+
+services:
+  tts-server:
+    build:
+      context: .
+      dockerfile: deployment/Dockerfile.tts
+    container_name: dat-tts-server
+    restart: unless-stopped
+    ports:
+      - "13300:13300"
+    volumes:
+      - ./data:/app/data
+      - hf-cache:/root/.cache/huggingface
+    env_file:
+      - .env
+    environment:
+      - TTS_HOST=0.0.0.0
+      - TTS_PORT=13300
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  discord-bot:
+    build:
+      context: .
+      dockerfile: deployment/Dockerfile.bot
+    container_name: dat-discord-bot
+    restart: unless-stopped
+    depends_on:
+      - tts-server
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - .env
+    environment:
+      - TTS_API_URL=http://tts-server:13300
+
+volumes:
+  hf-cache:
