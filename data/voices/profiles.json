@@ -5,8 +5,8 @@
     "gender": "female",
     "description": "เสียงผู้หญิงไทย นุ่มนวล ชัดเจน เป็นธรรมชาติ (Default)",
     "ref_audio_path": "data/voices/samples/default_female.wav",
-    "ref_text": "ใครเป็นผู้รับ",
-    "default_speed": 1.0,
+    "ref_text": "ฉันเดินทางไปเที่ยวที่จังหวัดเชียงใหม่ในช่วงฤดูหนาวเพื่อสัมผัสอากาศเย็นสบาย",
+    "default_speed": 0.9,
     "is_default": true,
     "is_approved": true
   },
@@ -16,8 +16,19 @@
     "gender": "female",
     "description": "เสียงผู้หญิงไทย จังหวะกระชับ เหมาะกับเกมเพลย์",
     "ref_audio_path": "data/voices/samples/default_female.wav",
+    "ref_text": "ฉันเดินทางไปเที่ยวที่จังหวัดเชียงใหม่ในช่วงฤดูหนาวเพื่อสัมผัสอากาศเย็นสบาย",
+    "default_speed": 1.05,
+    "is_default": false,
+    "is_approved": true
+  },
+  {
+    "id": "male_default",
+    "name": "กิตติ (Kitti - Male)",
+    "gender": "male",
+    "description": "เสียงผู้ชายไทย ทุ้ม นุ่ม ชัดเจน",
+    "ref_audio_path": "data/voices/samples/default_male.wav",
     "ref_text": "ใครเป็นผู้รับ",
-    "default_speed": 1.15,
+    "default_speed": 0.9,
     "is_default": false,
     "is_approved": true
   }

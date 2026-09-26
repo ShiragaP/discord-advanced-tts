@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     
     # Voice & Audio Defaults
     DEFAULT_VOICE_ID: str = "female_default"
-    DEFAULT_SPEED: float = 1.0
+    DEFAULT_SPEED: float = 0.9
     MAX_TEXT_LENGTH: int = 250
     USER_RATE_LIMIT_SECONDS: float = 2.0
     

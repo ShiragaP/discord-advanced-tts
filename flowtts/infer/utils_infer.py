@@ -482,10 +482,12 @@ def infer_batch_process(
         if fix_duration is not None:
             duration = int(fix_duration * target_sample_rate / hop_length)
         else:
-            # Calculate duration
-            ref_text_len = len(ref_text.encode("utf-8"))
-            gen_text_len = len(gen_text.encode("utf-8"))
-            duration = ref_audio_len + int(ref_audio_len / ref_text_len * gen_text_len / local_speed)
+            # Calculate duration with margin and tail buffer so sentence endings are not truncated
+            ref_text_len = len(ref_text.strip().encode("utf-8"))
+            gen_text_len = len(gen_text.strip().encode("utf-8"))
+            extra_tail_frames = int(0.4 * target_sample_rate / hop_length)
+            speech_frames = int(ref_audio_len / max(ref_text_len, 1) * gen_text_len / local_speed * 1.25) + extra_tail_frames
+            duration = ref_audio_len + speech_frames
 
         # inference
         with torch.inference_mode():
