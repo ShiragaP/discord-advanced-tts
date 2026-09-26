@@ -127,9 +127,14 @@ class TTSInferenceEngine:
             data, sr = sf.read(output_path, dtype="float32")
             duration = len(data) / sr
 
-            # Convert to WAV bytes in memory
+            # Normalize audio amplitude to 0.95 for loud, clear speech without clipping
+            max_amp = float(np.max(np.abs(data)))
+            if max_amp > 0.01:
+                data = (data / max_amp) * 0.95
+
+            # Convert to standard 16-bit PCM WAV bytes in memory
             buffer = io.BytesIO()
-            sf.write(buffer, data, sr, format="WAV")
+            sf.write(buffer, data, sr, format="WAV", subtype="PCM_16")
             wav_bytes = buffer.getvalue()
             return wav_bytes, duration
         finally:

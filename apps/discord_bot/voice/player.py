@@ -85,7 +85,13 @@ class VoicePlayer:
                     queue.queue.task_done()
                     continue
 
-                # Play audio using FFmpeg
+                # Play audio using FFmpeg with volume transformer
+                file_size = item.audio_path.stat().st_size if item.audio_path.exists() else 0
+                logger.info(
+                    "▶️ Playing audio for '%s' (%d bytes, path: %s)",
+                    item.text[:40], file_size, item.audio_path.name
+                )
+
                 finished_event = asyncio.Event()
 
                 def after_playback(error):
@@ -93,10 +99,11 @@ class VoicePlayer:
                         logger.error("Playback error in guild %d: %s", guild_id, error)
                     finished_event.set()
 
-                audio_source = discord.FFmpegPCMAudio(
+                ffmpeg_audio = discord.FFmpegPCMAudio(
                     str(item.audio_path),
-                    options="-loglevel error"
+                    options="-loglevel warning"
                 )
+                audio_source = discord.PCMVolumeTransformer(ffmpeg_audio, volume=1.2)
 
                 queue.is_playing = True
                 voice_client.play(audio_source, after=after_playback)
