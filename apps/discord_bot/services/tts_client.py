@@ -40,12 +40,23 @@ class TTSClient:
             await self._session.close()
 
     async def get_health(self) -> Dict[str, Any]:
+        if not settings.ENABLE_LOCAL_TTS:
+            return {
+                "status": "online",
+                "device": "Cloud Only (WaveSpeed AI)",
+                "vram_allocated_mb": 0.0,
+                "vram_free_gb": 0.0,
+                "model": settings.WAVESPEED_MODEL,
+                "local_tts": "disabled"
+            }
         session = await self.get_session()
         async with session.get(f"{self.base_url}/health") as resp:
             resp.raise_for_status()
             return await resp.json()
 
     async def is_ready(self) -> bool:
+        if not settings.ENABLE_LOCAL_TTS:
+            return True
         session = await self.get_session()
         try:
             async with session.get(f"{self.base_url}/ready", timeout=aiohttp.ClientTimeout(total=5.0)) as resp:
@@ -54,11 +65,31 @@ class TTSClient:
             return False
 
     async def get_voices(self) -> List[Dict[str, Any]]:
-        session = await self.get_session()
-        async with session.get(f"{self.base_url}/voices") as resp:
-            resp.raise_for_status()
-            data = await resp.json()
-            return data.get("voices", [])
+        if not settings.ENABLE_LOCAL_TTS:
+            return [
+                {
+                    "id": settings.WAVESPEED_VOICE_ID,
+                    "name": "WaveSpeed Cloud (ElevenLabs v3)",
+                    "is_default": True,
+                    "description": f"Model: {settings.WAVESPEED_MODEL}"
+                }
+            ]
+        try:
+            session = await self.get_session()
+            async with session.get(f"{self.base_url}/voices") as resp:
+                resp.raise_for_status()
+                data = await resp.json()
+                return data.get("voices", [])
+        except Exception as e:
+            logger.warning("Could not reach local TTS server for voice list: %s", e)
+            return [
+                {
+                    "id": settings.WAVESPEED_VOICE_ID,
+                    "name": "WaveSpeed Cloud (ElevenLabs v3)",
+                    "is_default": True,
+                    "description": f"Model: {settings.WAVESPEED_MODEL} (Local server offline)"
+                }
+            ]
 
     async def synthesize(
         self,
@@ -72,6 +103,11 @@ class TTSClient:
         Supports mode='local' (ThonburianTTS) and mode='cloud' (WaveSpeed / ElevenLabs).
         Returns the absolute Path to the local audio file.
         """
+        # If local TTS is globally disabled, redirect all local synthesis to wavespeed
+        if mode == "local" and not settings.ENABLE_LOCAL_TTS:
+            logger.info("Local TTS is disabled (ENABLE_LOCAL_TTS=false); redirecting synthesis to wavespeed.")
+            mode = "wavespeed"
+
         # Determine effective speed
         effective_speed = speed
         if mode in ["wavespeed", "cloud"]:
@@ -92,9 +128,11 @@ class TTSClient:
                 saved_path = audio_cache.put(text, voice_id, effective_speed, audio_bytes, mode=mode, ext=ext)
                 return saved_path
             except Exception as e:
-                logger.error("Cloud TTS (%s) synthesis failed: %s. Falling back to local TTS...", mode, e)
-                # Fallback to local
-                return await self.synthesize(text, voice_id=voice_id, speed=speed, mode="local")
+                if settings.ENABLE_LOCAL_TTS:
+                    logger.error("Cloud TTS (%s) synthesis failed: %s. Falling back to local TTS...", mode, e)
+                    return await self.synthesize(text, voice_id=voice_id, speed=speed, mode="local")
+                logger.error("Cloud TTS (%s) synthesis failed: %s (Local TTS disabled, cannot fall back)", mode, e)
+                raise
 
         # Local mode: call TTS server streaming endpoint
         session = await self.get_session()

@@ -172,7 +172,10 @@ async def prefix_mode(ctx: commands.Context, new_mode: str = None):
             f"• สมาชิกใน Whitelist ({whitelist_str}) จะอ่านด้วย WaveSpeed ส่วนสมาชิกท่านอื่นจะอ่านด้วย Local TTS อัตโนมัติ"
         )
     else:
-        await ctx.send("🖥️ เปลี่ยนโหมดเป็น **Local (ThonburianTTS F5-TTS)** เรียบร้อยแล้ว!")
+        if not settings.ENABLE_LOCAL_TTS:
+            await ctx.send("⚠️ **Local TTS (GPU) ถูกปิดใช้งานอยู่ในระบบ** (ENABLE_LOCAL_TTS=false)\nบอทจะยังคงอ่านด้วยเสียง WaveSpeed Cloud AI ตามปกติ")
+        else:
+            await ctx.send("🖥️ เปลี่ยนโหมดเป็น **Local (ThonburianTTS F5-TTS)** เรียบร้อยแล้ว!")
 
 
 @bot.command(name="whitelist")
@@ -413,7 +416,12 @@ async def on_message(message: discord.Message):
     chunks = normalizer.split_sentences(clean_text, max_chars=guild_settings.get("max_chars", settings.MAX_TEXT_LENGTH))
     queue = queue_manager.get_queue(message.guild.id)
     guild_mode = guild_settings.get("tts_mode", settings.DEFAULT_TTS_MODE)
-    if guild_mode in ["wavespeed", "cloud"]:
+    if not settings.ENABLE_LOCAL_TTS:
+        guild_mode = "wavespeed"
+        local_presets = {"female_default", "female_fast", "male_default", "vachana_female", "vachana_male", "pythaitts_default"}
+        if not voice_id or voice_id in local_presets:
+            voice_id = await db_manager.get_guild_wavespeed_voice(str(message.guild.id))
+    elif guild_mode in ["wavespeed", "cloud"]:
         if not await db_manager.is_user_allowed_wavespeed(str(message.guild.id), message.author.name, message.author.display_name):
             guild_mode = "local"
         else:

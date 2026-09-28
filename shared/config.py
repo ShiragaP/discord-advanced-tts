@@ -34,11 +34,13 @@ class Settings(BaseSettings):
     TTS_CFG_STRENGTH: float = 2.0
     
     # Voice & Audio Defaults
+    ENABLE_LOCAL_TTS: bool = False
     DEFAULT_VOICE_ID: str = "female_default"
     DEFAULT_SPEED: float = 0.9
-    DEFAULT_TTS_MODE: str = "local"  # "local" or "cloud"
+    DEFAULT_TTS_MODE: str = "wavespeed"  # "wavespeed" or "local"
     MAX_TEXT_LENGTH: int = 250
     USER_RATE_LIMIT_SECONDS: float = 2.0
+    WAVESPEED_ALLOW_ALL_WHEN_LOCAL_DISABLED: bool = True
     
     # Cloud TTS Providers (WaveSpeed / ElevenLabs)
     WAVESPEED_API_KEYS: str = ""

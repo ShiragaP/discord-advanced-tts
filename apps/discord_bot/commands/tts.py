@@ -122,7 +122,12 @@ class TTSCommands(commands.Cog):
         speed = user_pref["speed"]
         guild_settings = await db_manager.get_guild_settings(str(interaction.guild_id))
         guild_mode = guild_settings.get("tts_mode", settings.DEFAULT_TTS_MODE)
-        if guild_mode in ["wavespeed", "cloud"]:
+        if not settings.ENABLE_LOCAL_TTS:
+            guild_mode = "wavespeed"
+            local_presets = {"female_default", "female_fast", "male_default", "vachana_female", "vachana_male", "pythaitts_default"}
+            if not voice_id or voice_id in local_presets:
+                voice_id = await db_manager.get_guild_wavespeed_voice(str(interaction.guild_id))
+        elif guild_mode in ["wavespeed", "cloud"]:
             if not await db_manager.is_user_allowed_wavespeed(str(interaction.guild_id), interaction.user.name, interaction.user.display_name):
                 guild_mode = "local"
             else:
@@ -174,11 +179,18 @@ class TTSCommands(commands.Cog):
                 f"• สมาชิกใน Whitelist ({whitelist_str}) จะอ่านด้วย WaveSpeed ส่วนสมาชิกท่านอื่นจะอ่านด้วย Local TTS อัตโนมัติ"
             )
         else:
-            desc = (
-                f"🖥️ เปลี่ยนโหมดเป็น **Local (ThonburianTTS F5-TTS)** เรียบร้อยแล้ว!\n"
-                f"• ทำงานบน GPU ภายในเซิร์ฟเวอร์\n"
-                f"• ไม่จำกัดโควต้า / ไม่มีค่าใช้จ่ายภายนอก"
-            )
+            if not settings.ENABLE_LOCAL_TTS:
+                desc = (
+                    f"⚠️ **Local TTS (GPU) ถูกปิดใช้งานอยู่ในระบบ** (ENABLE_LOCAL_TTS=false)\n"
+                    f"• ระบบยังคงสังเคราะห์เสียงด้วย **WaveSpeed Cloud AI** เพื่อความต่อเนื่อง\n"
+                    f"• หากต้องการเปิดใช้งาน Local TTS ให้ตั้งค่า `ENABLE_LOCAL_TTS=true` ใน Environment"
+                )
+            else:
+                desc = (
+                    f"🖥️ เปลี่ยนโหมดเป็น **Local (ThonburianTTS F5-TTS)** เรียบร้อยแล้ว!\n"
+                    f"• ทำงานบน GPU ภายในเซิร์ฟเวอร์\n"
+                    f"• ไม่จำกัดโควต้า / ไม่มีค่าใช้จ่ายภายนอก"
+                )
 
         embed = discord.Embed(
             title="🎛️ ตั้งค่าโหมดสังเคราะห์เสียง (TTS Mode)",
@@ -239,13 +251,17 @@ class TTSCommands(commands.Cog):
         queue = queue_manager.get_queue(interaction.guild_id)
         guild_ws_voice = await db_manager.get_guild_wavespeed_voice(str(interaction.guild_id))
 
-        try:
-            health = await tts_client.get_health()
-            gpu_status = f"🟢 Online ({health['device']})"
-            vram_info = f"Allocated: {health['vram_allocated_mb']:.1f} MB | Free: {health['vram_free_gb']:.2f} GB"
-        except Exception:
-            gpu_status = "🔴 Offline / Unreachable"
-            vram_info = "N/A"
+        if not settings.ENABLE_LOCAL_TTS:
+            gpu_status = "☁️ WaveSpeed Cloud (Local TTS Disabled)"
+            vram_info = "N/A (Running in Cloud-only mode)"
+        else:
+            try:
+                health = await tts_client.get_health()
+                gpu_status = f"🟢 Online ({health['device']})"
+                vram_info = f"Allocated: {health['vram_allocated_mb']:.1f} MB | Free: {health['vram_free_gb']:.2f} GB"
+            except Exception:
+                gpu_status = "🔴 Offline / Unreachable"
+                vram_info = "N/A"
 
         embed = discord.Embed(
             title="⚡ Discord Advanced Thai TTS — System Status",

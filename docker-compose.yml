@@ -2,6 +2,9 @@ version: "3.8"
 
 services:
   tts-server:
+    profiles:
+      - local-tts
+      - tts
     build:
       context: .
       dockerfile: deployment/Dockerfile.tts
@@ -35,12 +38,18 @@ services:
       dockerfile: deployment/Dockerfile.bot
     container_name: dat-discord-bot
     restart: unless-stopped
-    depends_on:
-      - tts-server
     volumes:
       - ./data:/app/data
     environment:
       - DISCORD_TOKEN=${DISCORD_TOKEN}
+      - ENABLE_LOCAL_TTS=${ENABLE_LOCAL_TTS:-false}
+      - DEFAULT_TTS_MODE=${DEFAULT_TTS_MODE:-wavespeed}
+      - WAVESPEED_API_KEYS=${WAVESPEED_API_KEYS:-}
+      - WAVESPEED_MODEL=${WAVESPEED_MODEL:-elevenlabs/eleven-v3}
+      - WAVESPEED_VOICE_ID=${WAVESPEED_VOICE_ID:-zGjIP4SZlMnY9m93k97r}
+      - WAVESPEED_DEFAULT_SPEED=${WAVESPEED_DEFAULT_SPEED:-0.8}
+      - WAVESPEED_WHITELIST=${WAVESPEED_WHITELIST:-peony,shiraga,misu,touru}
+      - WAVESPEED_ALLOW_ALL_WHEN_LOCAL_DISABLED=${WAVESPEED_ALLOW_ALL_WHEN_LOCAL_DISABLED:-true}
       - TTS_API_URL=${TTS_API_URL:-http://tts-server:13300}
       - TTS_PORT=13300
     networks:
