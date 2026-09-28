@@ -123,7 +123,7 @@ class TTSCommands(commands.Cog):
         guild_settings = await db_manager.get_guild_settings(str(interaction.guild_id))
         guild_mode = guild_settings.get("tts_mode", settings.DEFAULT_TTS_MODE)
         if guild_mode in ["wavespeed", "cloud"]:
-            if not settings.is_user_allowed_wavespeed(interaction.user.name, interaction.user.display_name):
+            if not await db_manager.is_user_allowed_wavespeed(str(interaction.guild_id), interaction.user.name, interaction.user.display_name):
                 guild_mode = "local"
             else:
                 local_presets = {"female_default", "female_fast", "male_default", "vachana_female", "vachana_male", "pythaitts_default"}
@@ -163,7 +163,8 @@ class TTSCommands(commands.Cog):
 
         if new_mode == "wavespeed":
             wavespeed_count = len(settings.wavespeed_keys_list)
-            whitelist_str = ", ".join(f"'{k}'" for k in settings.wavespeed_whitelist_list)
+            whitelist = await db_manager.get_guild_whitelist(str(interaction.guild_id))
+            whitelist_str = ", ".join(f"'{k}'" for k in whitelist)
             guild_voice = await db_manager.get_guild_wavespeed_voice(str(interaction.guild_id))
             desc = (
                 f"☁️ เปลี่ยนโหมดเป็น **WaveSpeed (ElevenLabs v3)** เรียบร้อยแล้ว!\n"

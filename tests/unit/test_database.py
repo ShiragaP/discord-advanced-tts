@@ -61,3 +61,37 @@ async def test_guild_settings_and_pronunciations(temp_db):
     assert default_ws == "zGjIP4SZlMnY9m93k97r"
     await temp_db.set_guild_wavespeed_voice(guild_id, "custom_voice_abc")
     assert await temp_db.get_guild_wavespeed_voice(guild_id) == "custom_voice_abc"
+
+
+@pytest.mark.asyncio
+async def test_guild_whitelist(temp_db):
+    guild_id = "555666777"
+
+    # Initial get falls back to defaults
+    initial_wl = await temp_db.get_guild_whitelist(guild_id)
+    assert "peony" in initial_wl
+    assert "shiraga" in initial_wl
+    assert "misu" in initial_wl
+    assert "touru" in initial_wl
+
+    # Allowed check on default whitelist
+    assert await temp_db.is_user_allowed_wavespeed(guild_id, "PeonyGamer", "Alice") is True
+    assert await temp_db.is_user_allowed_wavespeed(guild_id, "john_doe", "Shiraga Fan") is True
+    assert await temp_db.is_user_allowed_wavespeed(guild_id, "random_user", "Nobody") is False
+
+    # Add new keyword
+    updated = await temp_db.add_guild_whitelist(guild_id, "Somchai")
+    assert "somchai" in updated
+    assert "peony" in updated
+    assert await temp_db.is_user_allowed_wavespeed(guild_id, "somchai123", "User") is True
+    assert await temp_db.is_user_allowed_wavespeed(guild_id, "user", "Mr. SOMCHAI") is True
+
+    # Remove a keyword
+    deleted, after_del = await temp_db.remove_guild_whitelist(guild_id, "misu")
+    assert deleted is True
+    assert "misu" not in after_del
+    assert await temp_db.is_user_allowed_wavespeed(guild_id, "misu39", "Misu") is False
+
+    # Remove non-existent keyword
+    deleted, _ = await temp_db.remove_guild_whitelist(guild_id, "nonexistent")
+    assert deleted is False

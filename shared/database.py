@@ -36,6 +36,13 @@ CREATE TABLE IF NOT EXISTS custom_pronunciation (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (guild_id, word)
 );
+
+CREATE TABLE IF NOT EXISTS guild_whitelist (
+    guild_id TEXT NOT NULL,
+    keyword TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (guild_id, keyword)
+);
 """
 
 
@@ -53,6 +60,17 @@ class DatabaseManager:
                 pass
             try:
                 await db.execute("ALTER TABLE guild_settings ADD COLUMN wavespeed_voice_id TEXT")
+            except Exception:
+                pass
+            try:
+                await db.execute("""
+                CREATE TABLE IF NOT EXISTS guild_whitelist (
+                    guild_id TEXT NOT NULL,
+                    keyword TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (guild_id, keyword)
+                )
+                """)
             except Exception:
                 pass
             await db.commit()
@@ -190,6 +208,70 @@ class DatabaseManager:
                 (str(guild_id), word, replacement)
             )
             await db.commit()
+
+    async def get_guild_whitelist(self, guild_id: str) -> List[str]:
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                "SELECT keyword FROM guild_whitelist WHERE guild_id = ? ORDER BY keyword ASC",
+                (str(guild_id),)
+            )
+            rows = await cursor.fetchall()
+            if rows:
+                return [r["keyword"] for r in rows]
+            # Fallback to default configured whitelist if guild has not customized
+            return list(settings.wavespeed_whitelist_list)
+
+    async def add_guild_whitelist(self, guild_id: str, keyword: str) -> List[str]:
+        clean_kw = keyword.strip().lower()
+        if not clean_kw:
+            return await self.get_guild_whitelist(guild_id)
+
+        async with aiosqlite.connect(self.db_path) as db:
+            # Check if guild has any entries yet; if not, seed with defaults first
+            cursor = await db.execute("SELECT COUNT(*) FROM guild_whitelist WHERE guild_id = ?", (str(guild_id),))
+            count = (await cursor.fetchone())[0]
+            if count == 0:
+                for def_kw in settings.wavespeed_whitelist_list:
+                    await db.execute(
+                        "INSERT OR IGNORE INTO guild_whitelist (guild_id, keyword) VALUES (?, ?)",
+                        (str(guild_id), def_kw.strip().lower())
+                    )
+
+            await db.execute(
+                "INSERT OR IGNORE INTO guild_whitelist (guild_id, keyword) VALUES (?, ?)",
+                (str(guild_id), clean_kw)
+            )
+            await db.commit()
+
+        return await self.get_guild_whitelist(guild_id)
+
+    async def remove_guild_whitelist(self, guild_id: str, keyword: str) -> tuple[bool, List[str]]:
+        clean_kw = keyword.strip().lower()
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute("SELECT COUNT(*) FROM guild_whitelist WHERE guild_id = ?", (str(guild_id),))
+            count = (await cursor.fetchone())[0]
+            if count == 0:
+                for def_kw in settings.wavespeed_whitelist_list:
+                    await db.execute(
+                        "INSERT OR IGNORE INTO guild_whitelist (guild_id, keyword) VALUES (?, ?)",
+                        (str(guild_id), def_kw.strip().lower())
+                    )
+
+            del_cursor = await db.execute(
+                "DELETE FROM guild_whitelist WHERE guild_id = ? AND keyword = ?",
+                (str(guild_id), clean_kw)
+            )
+            deleted = del_cursor.rowcount > 0
+            await db.commit()
+
+        updated_list = await self.get_guild_whitelist(guild_id)
+        return deleted, updated_list
+
+    async def is_user_allowed_wavespeed(self, guild_id: str, username: str, display_name: str) -> bool:
+        whitelist = await self.get_guild_whitelist(guild_id)
+        user_str = f"{username} {display_name}".lower()
+        return any(kw in user_str for kw in whitelist)
 
 
 db_manager = DatabaseManager()

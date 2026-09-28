@@ -163,7 +163,8 @@ async def prefix_mode(ctx: commands.Context, new_mode: str = None):
     await db_manager.set_guild_mode(str(ctx.guild.id), mode_val)
     if mode_val == "wavespeed":
         wavespeed_count = len(settings.wavespeed_keys_list)
-        whitelist_str = ", ".join(f"'{k}'" for k in settings.wavespeed_whitelist_list)
+        whitelist = await db_manager.get_guild_whitelist(str(ctx.guild.id))
+        whitelist_str = ", ".join(f"'{k}'" for k in whitelist)
         guild_voice = await db_manager.get_guild_wavespeed_voice(str(ctx.guild.id))
         await ctx.send(
             f"☁️ เปลี่ยนโหมดเป็น **WaveSpeed (ElevenLabs v3)** เรียบร้อยแล้ว!\n"
@@ -172,6 +173,43 @@ async def prefix_mode(ctx: commands.Context, new_mode: str = None):
         )
     else:
         await ctx.send("🖥️ เปลี่ยนโหมดเป็น **Local (ThonburianTTS F5-TTS)** เรียบร้อยแล้ว!")
+
+
+@bot.command(name="whitelist")
+async def prefix_whitelist(ctx: commands.Context, action: str = "list", *, keyword: str = ""):
+    """Fallback prefix command: !whitelist <add|remove|list> [keyword]"""
+    if not (ctx.author.guild_permissions.administrator or ctx.author.guild_permissions.manage_guild):
+        await ctx.send("❌ คำสั่งนี้ใช้ได้เฉพาะ Admin หรือผู้ที่มีสิทธิ์จัดการเซิร์ฟเวอร์ (Manage Server) เท่านั้น")
+        return
+
+    act = action.lower().strip()
+    if act == "add":
+        clean_kw = keyword.strip()
+        if not clean_kw:
+            await ctx.send("❌ กรุณาระบุคำที่ต้องการเพิ่ม เช่น `!whitelist add misu`")
+            return
+        updated = await db_manager.add_guild_whitelist(str(ctx.guild.id), clean_kw)
+        list_str = ", ".join(f"`{k}`" for k in updated)
+        await ctx.send(f"✅ เพิ่ม `{clean_kw.lower()}` เข้า WaveSpeed Whitelist เรียบร้อยแล้ว!\n📋 Whitelist ปัจจุบัน: {list_str}")
+
+    elif act in ["remove", "del", "delete"]:
+        clean_kw = keyword.strip()
+        if not clean_kw:
+            await ctx.send("❌ กรุณาระบุคำที่ต้องการลบ เช่น `!whitelist remove misu`")
+            return
+        deleted, updated = await db_manager.remove_guild_whitelist(str(ctx.guild.id), clean_kw)
+        list_str = ", ".join(f"`{k}`" for k in updated) if updated else "*(ว่างเปล่า)*"
+        if deleted:
+            await ctx.send(f"🗑️ ลบ `{clean_kw.lower()}` ออกจาก Whitelist เรียบร้อยแล้ว!\n📋 Whitelist ปัจจุบัน: {list_str}")
+        else:
+            await ctx.send(f"⚠️ ไม่พบ `{clean_kw.lower()}` ใน Whitelist\n📋 Whitelist ปัจจุบัน: {list_str}")
+
+    elif act == "list":
+        current = await db_manager.get_guild_whitelist(str(ctx.guild.id))
+        list_str = ", ".join(f"`{k}`" for k in current) if current else "*(ว่างเปล่า)*"
+        await ctx.send(f"📋 **WaveSpeed Whitelist ของเซิร์ฟเวอร์:**\n{list_str}\n\n💡 สมาชิกที่มีคำเหล่านี้ในชื่อจะได้รับสิทธิ์ใช้ WaveSpeed")
+    else:
+        await ctx.send("❌ รูปแบบคำสั่งไม่ถูกต้อง:\n• `!whitelist list`\n• `!whitelist add <คำ>`\n• `!whitelist remove <คำ>`")
 
 
 @bot.command(name="wavespeed_voice")
@@ -376,7 +414,7 @@ async def on_message(message: discord.Message):
     queue = queue_manager.get_queue(message.guild.id)
     guild_mode = guild_settings.get("tts_mode", settings.DEFAULT_TTS_MODE)
     if guild_mode in ["wavespeed", "cloud"]:
-        if not settings.is_user_allowed_wavespeed(message.author.name, message.author.display_name):
+        if not await db_manager.is_user_allowed_wavespeed(str(message.guild.id), message.author.name, message.author.display_name):
             guild_mode = "local"
         else:
             local_presets = {"female_default", "female_fast", "male_default", "vachana_female", "vachana_male", "pythaitts_default"}
