@@ -101,7 +101,7 @@ class VoicePlayer:
 
                 ffmpeg_audio = discord.FFmpegPCMAudio(
                     str(item.audio_path),
-                    options="-loglevel warning"
+                    options="-af apad=pad_dur=0.5 -loglevel warning"
                 )
                 audio_source = discord.PCMVolumeTransformer(ffmpeg_audio, volume=1.2)
 
@@ -110,6 +110,8 @@ class VoicePlayer:
 
                 # Wait until audio finishes playing
                 await finished_event.wait()
+                # Natural breathing pause after each sentence before next queue item
+                await asyncio.sleep(0.35)
                 queue.is_playing = False
                 queue.current_item = None
                 queue.queue.task_done()

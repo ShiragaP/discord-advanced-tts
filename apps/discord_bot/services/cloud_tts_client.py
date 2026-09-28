@@ -131,8 +131,14 @@ class CloudTTSClient:
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
         }
+
+        # Add natural trail-off padding if sentence has no terminal punctuation
+        prompt_text = text.strip()
+        if prompt_text and not prompt_text.endswith((".", "!", "?", "…", "...", "~")):
+            prompt_text = f"{prompt_text} ..."
+
         payload = {
-            "text": text,
+            "text": prompt_text,
             "voice_id": target_voice,
             "similarity": 0.75,
             "stability": 0.5,
@@ -188,8 +194,14 @@ class CloudTTSClient:
             "xi-api-key": api_key,
             "Content-Type": "application/json"
         }
+
+        # Add natural trail-off padding if sentence has no terminal punctuation
+        prompt_text = text.strip()
+        if prompt_text and not prompt_text.endswith((".", "!", "?", "…", "...", "~")):
+            prompt_text = f"{prompt_text} ..."
+
         payload = {
-            "text": text,
+            "text": prompt_text,
             "model_id": settings.ELEVENLABS_MODEL_ID,
             "voice_settings": {
                 "stability": 0.5,
