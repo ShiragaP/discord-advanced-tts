@@ -6,6 +6,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 import logging
+from typing import Optional
 
 from shared.database import db_manager
 from apps.discord_bot.services.tts_client import tts_client
@@ -53,12 +54,31 @@ class VoiceCommands(commands.Cog):
             logger.exception("Failed to fetch voices")
             await interaction.followup.send(f"❌ ไม่สามารถดึงรายชื่อเสียงได้: {e}", ephemeral=True)
 
-    @app_commands.command(name="voice", description="เลือกโปรไฟล์เสียงและความเร็วพูดส่วนตัวของคุณ")
+    @app_commands.command(name="voice", description="เลือกโปรไฟล์เสียงและความเร็วพูดส่วนตัว หรือกำหนดให้สมาชิก (สำหรับ Admin)")
     @app_commands.describe(
-        voice_id="รหัสโปรไฟล์เสียง (ดูได้จาก /voices หรือระบุ ElevenLabs Voice ID เมื่อใช้ WaveSpeed)",
-        speed="ความเร็วเสียงพูด (0.5 ถึง 2.0, ค่าเริ่มต้น 1.0)"
+        voice_id="รหัสโปรไฟล์เสียง (ดูได้จาก /voices หรือระบุ ElevenLabs Voice ID เช่น 6UZ6Y6OSl14UA2aOxuMM)",
+        speed="ความเร็วเสียงพูด (0.5 ถึง 2.0, ค่าเริ่มต้น 1.0)",
+        member="[Admin เท่านั้น] ระบุสมาชิกที่ต้องการตั้งค่าให้ (เว้นว่างไว้หากต้องการตั้งค่าให้ตัวเอง)"
     )
-    async def voice(self, interaction: discord.Interaction, voice_id: str, speed: float = 1.0):
+    async def voice(
+        self,
+        interaction: discord.Interaction,
+        voice_id: str,
+        speed: float = 1.0,
+        member: Optional[discord.Member] = None
+    ):
+        target_user = member or interaction.user
+        is_setting_other = target_user.id != interaction.user.id
+
+        if is_setting_other:
+            is_admin = interaction.user.guild_permissions.administrator or interaction.user.guild_permissions.manage_guild
+            if not is_admin:
+                await interaction.response.send_message(
+                    "❌ คุณไม่มีสิทธิ์ตั้งค่าเสียงให้สมาชิกท่านอื่น (ต้องมีสิทธิ์ Admin หรือ Manage Server)",
+                    ephemeral=True
+                )
+                return
+
         if speed < 0.5 or speed > 2.0:
             await interaction.response.send_message("❌ ความเร็วเสียงต้องอยู่ระหว่าง 0.5 ถึง 2.0", ephemeral=True)
             return
@@ -74,7 +94,7 @@ class VoiceCommands(commands.Cog):
             if not matched and not is_custom_id:
                 voice_ids = ", ".join(f"`{v['id']}`" for v in available_voices)
                 await interaction.followup.send(
-                    f"❌ ไม่พบรหัสเสียง `{clean_voice_id}`\nเสียง Local ที่มี: {voice_ids}\nหรือใส่ ElevenLabs Voice ID เมื่อใช้ WaveSpeed",
+                    f"❌ ไม่พบรหัสเสียง `{clean_voice_id}`\nเสียงที่ใช้ได้: {voice_ids}\nหรือใส่ ElevenLabs Voice ID สำหรับ WaveSpeed",
                     ephemeral=True
                 )
                 return
@@ -82,13 +102,14 @@ class VoiceCommands(commands.Cog):
             saved_voice_id = clean_voice_id if (is_custom_id and not matched) else clean_voice_id.lower()
 
             await db_manager.set_user_preference(
-                user_id=str(interaction.user.id),
+                user_id=str(target_user.id),
                 voice_id=saved_voice_id,
                 speed=speed
             )
 
+            target_desc = f"ให้สมาชิก {target_user.mention}" if is_setting_other else "ของคุณ"
             await interaction.followup.send(
-                f"✅ บันทึกการตั้งค่าเสียงของคุณเรียบร้อยแล้ว!\n**เสียง:** `{saved_voice_id}` | **ความเร็ว:** `{speed}x`",
+                f"✅ บันทึกการตั้งค่าเสียง{target_desc}เรียบร้อยแล้ว!\n**เสียง:** `{saved_voice_id}` | **ความเร็ว:** `{speed}x`",
                 ephemeral=True
             )
         except Exception as e:

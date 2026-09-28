@@ -263,6 +263,17 @@ async def prefix_voice(ctx: commands.Context, *, args: str = None):
     raw = args.strip()
     voice_id = None
     speed = 1.0
+    target_user = ctx.author
+
+    # Check if a member was mentioned to set voice for (Admin only)
+    if ctx.message.mentions:
+        target_user = ctx.message.mentions[0]
+        if target_user.id != ctx.author.id:
+            if not (ctx.author.guild_permissions.administrator or ctx.author.guild_permissions.manage_guild):
+                await ctx.send("❌ คุณไม่มีสิทธิ์ตั้งค่าเสียงให้สมาชิกท่านอื่น (ต้องมีสิทธิ์ Admin หรือ Manage Server)")
+                return
+        import re
+        raw = re.sub(r"<@!?[0-9]+>", "", raw).strip()
 
     # Support named parameters: voice_id: xxx speed: yyy
     if "voice_id:" in raw or "speed:" in raw:
@@ -306,13 +317,50 @@ async def prefix_voice(ctx: commands.Context, *, args: str = None):
 
         saved_voice_id = voice_id if (is_custom_id and not matched) else voice_id.lower()
         await db_manager.set_user_preference(
-            user_id=str(ctx.author.id),
+            user_id=str(target_user.id),
             voice_id=saved_voice_id,
             speed=speed
         )
-        await ctx.send(f"✅ บันทึกการตั้งค่าเสียงของคุณเรียบร้อยแล้ว!\n**เสียง:** `{saved_voice_id}` | **ความเร็ว:** `{speed}x`")
+        target_name = f"สมาชิก {target_user.mention}" if target_user.id != ctx.author.id else "ของคุณ"
+        await ctx.send(f"✅ บันทึกการตั้งค่าเสียง{target_name}เรียบร้อยแล้ว!\n**เสียง:** `{saved_voice_id}` | **ความเร็ว:** `{speed}x`")
     except Exception as e:
         await ctx.send(f"❌ เกิดข้อผิดพลาดในการบันทึก: {e}")
+
+
+@bot.command(name="setvoice")
+async def prefix_setvoice(ctx: commands.Context, member: discord.Member = None, voice_id: str = None, speed: float = 1.0):
+    """Fallback admin prefix command: !setvoice @member <voice_id> [speed]"""
+    if not (ctx.author.guild_permissions.administrator or ctx.author.guild_permissions.manage_guild):
+        await ctx.send("❌ คำสั่งนี้ใช้ได้เฉพาะ Admin หรือผู้ที่มีสิทธิ์จัดการเซิร์ฟเวอร์ (Manage Server) เท่านั้น")
+        return
+
+    if not member or not voice_id:
+        await ctx.send("❌ กรุณาระบุสมาชิกและ Voice ID เช่น `!setvoice @User 6UZ6Y6OSl14UA2aOxuMM 0.8`")
+        return
+
+    if speed < 0.5 or speed > 2.0:
+        await ctx.send("❌ ความเร็วเสียงต้องอยู่ระหว่าง 0.5 ถึง 2.0")
+        return
+
+    clean_voice_id = voice_id.strip()
+    is_custom_id = 3 <= len(clean_voice_id) <= 60 and all(c.isalnum() or c in "-_" for c in clean_voice_id)
+    available_voices = await tts_client.get_voices()
+    matched = any(v["id"].lower() == clean_voice_id.lower() for v in available_voices)
+
+    if not matched and not is_custom_id:
+        await ctx.send(f"❌ Voice ID `{clean_voice_id}` ไม่ถูกต้อง (ความยาว 3-60 ตัวอักษร)")
+        return
+
+    saved_voice_id = clean_voice_id if (is_custom_id and not matched) else clean_voice_id.lower()
+    await db_manager.set_user_preference(
+        user_id=str(member.id),
+        voice_id=saved_voice_id,
+        speed=speed
+    )
+    await ctx.send(
+        f"✅ กำหนดเสียงให้สมาชิก {member.mention} เรียบร้อยแล้ว!\n"
+        f"**Voice ID:** `{saved_voice_id}` | **ความเร็ว:** `{speed}x`"
+    )
 
 
 @bot.command(name="voices")
