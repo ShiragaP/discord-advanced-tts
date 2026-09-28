@@ -122,6 +122,7 @@ class TTSCommands(commands.Cog):
         speed = user_pref["speed"]
         guild_settings = await db_manager.get_guild_settings(str(interaction.guild_id))
         guild_mode = guild_settings.get("tts_mode", settings.DEFAULT_TTS_MODE)
+        wavespeed_model = guild_settings.get("wavespeed_model") or settings.WAVESPEED_MODEL
         if not settings.ENABLE_LOCAL_TTS:
             guild_mode = "wavespeed"
             local_presets = {"female_default", "female_fast", "male_default", "vachana_female", "vachana_male", "pythaitts_default"}
@@ -141,7 +142,7 @@ class TTSCommands(commands.Cog):
             return
 
         try:
-            audio_path = await tts_client.synthesize(clean_text, voice_id=voice_id, speed=speed, mode=guild_mode)
+            audio_path = await tts_client.synthesize(clean_text, voice_id=voice_id, speed=speed, mode=guild_mode, model=wavespeed_model)
             queue = queue_manager.get_queue(interaction.guild_id)
             await queue.put(AudioQueueItem(
                 audio_path=audio_path,
@@ -171,9 +172,10 @@ class TTSCommands(commands.Cog):
             whitelist = await db_manager.get_guild_whitelist(str(interaction.guild_id))
             whitelist_str = ", ".join(f"'{k}'" for k in whitelist)
             guild_voice = await db_manager.get_guild_wavespeed_voice(str(interaction.guild_id))
+            guild_model = await db_manager.get_guild_wavespeed_model(str(interaction.guild_id))
             desc = (
-                f"☁️ เปลี่ยนโหมดเป็น **WaveSpeed AI ({settings.WAVESPEED_MODEL})** เรียบร้อยแล้ว!\n"
-                f"• โมเดล: `{settings.WAVESPEED_MODEL}`\n"
+                f"☁️ เปลี่ยนโหมดเป็น **WaveSpeed AI ({guild_model})** เรียบร้อยแล้ว!\n"
+                f"• โมเดล: `{guild_model}`\n"
                 f"• Active API Keys: `{wavespeed_count}` keys (สุ่มคีย์อัตโนมัติทุกครั้ง)\n"
                 f"• Voice ID ปัจจุบัน: `{guild_voice}` (เปลี่ยนได้ด้วย `/wavespeed_voice`)\n"
                 f"• สมาชิกใน Whitelist ({whitelist_str}) จะอ่านด้วย WaveSpeed ส่วนสมาชิกท่านอื่นจะอ่านด้วย Local TTS อัตโนมัติ"
@@ -200,6 +202,34 @@ class TTSCommands(commands.Cog):
         await interaction.followup.send(embed=embed)
 
     @app_commands.command(
+        name="wavespeed_model",
+        description="เลือกโมเดล WaveSpeed AI (เช่น Turbo v2.5 เพื่อความเร็วสูงสุด หรือ v3 คุณภาพสตูดิโอ)"
+    )
+    @app_commands.describe(
+        model="โมเดล ElevenLabs AI ที่ต้องการใช้งาน"
+    )
+    @app_commands.choices(model=[
+        app_commands.Choice(name="Turbo v2.5 (เร็วที่สุด ~1.4s, Latency ต่ำ แนะนำ)", value="elevenlabs/turbo-v2.5"),
+        app_commands.Choice(name="Multilingual v2 (มาตรฐาน เสถียร ~1.8s)", value="elevenlabs/multilingual-v2"),
+        app_commands.Choice(name="Eleven v3 (คุณภาพสตูดิโอสูงสุด ~2.5s)", value="elevenlabs/eleven-v3"),
+    ])
+    async def wavespeed_model(self, interaction: discord.Interaction, model: app_commands.Choice[str]):
+        await interaction.response.defer()
+        selected_model = model.value
+        await db_manager.set_guild_wavespeed_model(str(interaction.guild_id), selected_model)
+
+        embed = discord.Embed(
+            title="🧠 อัปเดตโมเดล WaveSpeed AI เรียบร้อยแล้ว!",
+            description=(
+                f"• **โมเดลใหม่:** `{selected_model}`\n"
+                f"• มีผลกับการสังเคราะห์เสียง WaveSpeed ทันที\n"
+                f"• หากต้องการความเร็วในการตอบสนองสูงสุด แนะนำให้ใช้ `Turbo v2.5`"
+            ),
+            color=discord.Color.green()
+        )
+        await interaction.followup.send(embed=embed)
+
+    @app_commands.command(
         name="wavespeed_voice",
         description="เปลี่ยนหรือดูรหัสเสียง WaveSpeed (ElevenLabs Voice ID) ของเซิร์ฟเวอร์แบบทันที"
     )
@@ -209,15 +239,17 @@ class TTSCommands(commands.Cog):
     async def wavespeed_voice(self, interaction: discord.Interaction, voice_id: Optional[str] = None):
         await interaction.response.defer()
         current_voice = await db_manager.get_guild_wavespeed_voice(str(interaction.guild_id))
+        current_model = await db_manager.get_guild_wavespeed_model(str(interaction.guild_id))
 
         if not voice_id:
             embed = discord.Embed(
                 title="🎙️ การตั้งค่าเสียง WaveSpeed (ElevenLabs Voice ID)",
                 description=(
                     f"• **Voice ID ปัจจุบัน:** `{current_voice}`\n"
-                    f"• **โมเดล:** `{settings.WAVESPEED_MODEL}`\n"
+                    f"• **โมเดล:** `{current_model}`\n"
                     f"• **ความเร็วเริ่มต้น:** `{settings.WAVESPEED_DEFAULT_SPEED}x`\n\n"
                     f"💡 หากต้องการเปลี่ยนเสียง ให้พิมพ์: `/wavespeed_voice [voice_id]`\n"
+                    f"💡 หากต้องการเปลี่ยนโมเดล ให้พิมพ์: `/wavespeed_model`\n"
                     f"💡 ตัวอย่าง Voice ID ภาษาไทยเริ่มต้น: `{settings.WAVESPEED_VOICE_ID}`"
                 ),
                 color=discord.Color.blue()
@@ -250,6 +282,7 @@ class TTSCommands(commands.Cog):
         guild_settings = await db_manager.get_guild_settings(str(interaction.guild_id))
         queue = queue_manager.get_queue(interaction.guild_id)
         guild_ws_voice = await db_manager.get_guild_wavespeed_voice(str(interaction.guild_id))
+        guild_ws_model = await db_manager.get_guild_wavespeed_model(str(interaction.guild_id))
 
         if not settings.ENABLE_LOCAL_TTS:
             gpu_status = "☁️ WaveSpeed Cloud (Local TTS Disabled)"
@@ -274,6 +307,7 @@ class TTSCommands(commands.Cog):
             inline=True
         )
         embed.add_field(name="WaveSpeed Voice", value=f"`{guild_ws_voice}`", inline=True)
+        embed.add_field(name="WaveSpeed Model", value=f"`{guild_ws_model}`", inline=True)
         embed.add_field(name="VRAM Status", value=vram_info, inline=False)
         embed.add_field(
             name="Guild Voice Channel",
@@ -287,6 +321,6 @@ class TTSCommands(commands.Cog):
         )
         embed.add_field(name="Queue Length", value=str(queue.size()), inline=True)
         embed.add_field(name="Currently Playing", value="Yes" if queue.is_playing else "No", inline=True)
-        embed.set_footer(text=f"Port: {settings.TTS_PORT} | Local: {settings.TTS_MODEL_TYPE} | Cloud: {settings.WAVESPEED_MODEL}")
+        embed.set_footer(text=f"Port: {settings.TTS_PORT} | Local: {settings.TTS_MODEL_TYPE} | Cloud: {guild_ws_model}")
 
         await interaction.followup.send(embed=embed)

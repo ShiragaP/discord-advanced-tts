@@ -48,3 +48,18 @@ def test_cache_key_different_parameters(temp_cache):
     assert hit_a != hit_b
     assert hit_a.read_bytes() == audio_1
     assert hit_b.read_bytes() == audio_2
+
+
+def test_cache_key_different_models(temp_cache):
+    text = "ข้อความทดสอบโมเดล"
+    voice = "voice_test"
+    speed = 0.8
+    audio_turbo = b"TURBO_AUDIO"
+    audio_v3 = b"V3_AUDIO"
+
+    path_turbo = temp_cache.put(text, voice, speed, audio_turbo, mode="wavespeed", model="elevenlabs/turbo-v2.5")
+    path_v3 = temp_cache.put(text, voice, speed, audio_v3, mode="wavespeed", model="elevenlabs/eleven-v3")
+
+    assert path_turbo != path_v3
+    assert temp_cache.get(text, voice, speed, mode="wavespeed", model="elevenlabs/turbo-v2.5").read_bytes() == audio_turbo
+    assert temp_cache.get(text, voice, speed, mode="wavespeed", model="elevenlabs/eleven-v3").read_bytes() == audio_v3

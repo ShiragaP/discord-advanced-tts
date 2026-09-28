@@ -62,6 +62,14 @@ async def test_guild_settings_and_pronunciations(temp_db):
     await temp_db.set_guild_wavespeed_voice(guild_id, "custom_voice_abc")
     assert await temp_db.get_guild_wavespeed_voice(guild_id) == "custom_voice_abc"
 
+    # Guild wavespeed model
+    from shared.config import settings
+    default_model = await temp_db.get_guild_wavespeed_model(guild_id)
+    assert default_model == settings.WAVESPEED_MODEL
+    target_custom = "elevenlabs/multilingual-v2" if settings.WAVESPEED_MODEL == "elevenlabs/eleven-v3" else "elevenlabs/eleven-v3"
+    await temp_db.set_guild_wavespeed_model(guild_id, target_custom)
+    assert await temp_db.get_guild_wavespeed_model(guild_id) == target_custom
+
 
 @pytest.mark.asyncio
 async def test_guild_whitelist(temp_db):

@@ -232,16 +232,50 @@ async def prefix_wavespeed_voice(ctx: commands.Context, voice_id: str = None):
     await ctx.send(f"✅ อัปเดต WaveSpeed Voice ID สำหรับเซิร์ฟเวอร์นี้เป็น `{clean_id}` เรียบร้อยแล้ว!")
 
 
+@bot.command(name="wavespeed_model")
+async def prefix_wavespeed_model(ctx: commands.Context, model_id: str = None):
+    """Fallback prefix command: !wavespeed_model [model_id]"""
+    if not model_id:
+        current_model = await db_manager.get_guild_wavespeed_model(str(ctx.guild.id))
+        await ctx.send(
+            f"🧠 **WaveSpeed Model ปัจจุบัน:** `{current_model}`\n\n"
+            f"โมเดลที่แนะนำ:\n"
+            f"• `!wavespeed_model elevenlabs/turbo-v2.5` (⚡ เร็วที่สุด ~1.4s, Latency ต่ำ)\n"
+            f"• `!wavespeed_model elevenlabs/multilingual-v2` (🌐 เสถียร มาตรฐาน ~1.8s)\n"
+            f"• `!wavespeed_model elevenlabs/eleven-v3` (🎙️ คุณภาพสตูดิโอสูงสุด ~2.5s)"
+        )
+        return
+
+    clean_model = model_id.strip()
+    aliases = {
+        "turbo": "elevenlabs/turbo-v2.5",
+        "turbo-v2.5": "elevenlabs/turbo-v2.5",
+        "turbo2.5": "elevenlabs/turbo-v2.5",
+        "v2.5": "elevenlabs/turbo-v2.5",
+        "multilingual": "elevenlabs/multilingual-v2",
+        "v2": "elevenlabs/multilingual-v2",
+        "multilingual-v2": "elevenlabs/multilingual-v2",
+        "v3": "elevenlabs/eleven-v3",
+        "eleven-v3": "elevenlabs/eleven-v3",
+    }
+    resolved_model = aliases.get(clean_model.lower(), clean_model)
+
+    await db_manager.set_guild_wavespeed_model(str(ctx.guild.id), resolved_model)
+    await ctx.send(f"✅ อัปเดต WaveSpeed Model เป็น `{resolved_model}` เรียบร้อยแล้ว! (มีผลกับการอ่านข้อความทันที)")
+
+
 @bot.command(name="status")
 async def prefix_status(ctx: commands.Context):
     """Fallback prefix command: !status"""
     guild_settings = await db_manager.get_guild_settings(str(ctx.guild.id))
     current_mode = guild_settings.get("tts_mode", settings.DEFAULT_TTS_MODE)
     guild_ws_voice = await db_manager.get_guild_wavespeed_voice(str(ctx.guild.id))
+    guild_ws_model = await db_manager.get_guild_wavespeed_model(str(ctx.guild.id))
     await ctx.send(
         f"⚡ **DAT System Status**\n"
         f"• โหมดปัจจุบัน: `{current_mode.upper()}`\n"
         f"• WaveSpeed Voice: `{guild_ws_voice}`\n"
+        f"• WaveSpeed Model: `{guild_ws_model}`\n"
         f"• กำลังเชื่อมต่อ: {'Yes' if ctx.guild.voice_client and ctx.guild.voice_client.is_connected() else 'No'}"
     )
 
@@ -464,6 +498,7 @@ async def on_message(message: discord.Message):
     chunks = normalizer.split_sentences(clean_text, max_chars=guild_settings.get("max_chars", settings.MAX_TEXT_LENGTH))
     queue = queue_manager.get_queue(message.guild.id)
     guild_mode = guild_settings.get("tts_mode", settings.DEFAULT_TTS_MODE)
+    wavespeed_model = guild_settings.get("wavespeed_model") or settings.WAVESPEED_MODEL
     if not settings.ENABLE_LOCAL_TTS:
         guild_mode = "wavespeed"
         local_presets = {"female_default", "female_fast", "male_default", "vachana_female", "vachana_male", "pythaitts_default"}
@@ -479,7 +514,7 @@ async def on_message(message: discord.Message):
 
     for chunk in chunks:
         try:
-            audio_path = await tts_client.synthesize(chunk, voice_id=voice_id, speed=speed, mode=guild_mode)
+            audio_path = await tts_client.synthesize(chunk, voice_id=voice_id, speed=speed, mode=guild_mode, model=wavespeed_model)
             await queue.put(AudioQueueItem(
                 audio_path=audio_path,
                 text=chunk,

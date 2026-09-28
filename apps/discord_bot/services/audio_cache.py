@@ -18,15 +18,16 @@ class AudioCache:
         self.max_size_mb = max_size_mb or settings.CACHE_MAX_SIZE_MB
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-    def _generate_key(self, text: str, voice_id: str, speed: float, mode: str = "local") -> str:
-        raw_key = f"{text.strip()}:{voice_id}:{speed:.2f}:{mode}:{settings.TTS_MODEL_TYPE}:v3"
+    def _generate_key(self, text: str, voice_id: str, speed: float, mode: str = "local", model: str = "") -> str:
+        eff_model = model or (settings.WAVESPEED_MODEL if mode in ["wavespeed", "cloud"] else settings.TTS_MODEL_TYPE)
+        raw_key = f"{text.strip()}:{voice_id}:{speed:.2f}:{mode}:{eff_model}:v4"
         return hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
 
-    def get(self, text: str, voice_id: str, speed: float, mode: str = "local") -> Optional[Path]:
+    def get(self, text: str, voice_id: str, speed: float, mode: str = "local", model: str = "") -> Optional[Path]:
         if not settings.CACHE_ENABLED:
             return None
 
-        key = self._generate_key(text, voice_id, speed, mode=mode)
+        key = self._generate_key(text, voice_id, speed, mode=mode, model=model)
         for ext in ["wav", "mp3"]:
             cache_path = self.cache_dir / f"{key}.{ext}"
             if cache_path.exists():
@@ -37,8 +38,8 @@ class AudioCache:
                 return cache_path
         return None
 
-    def put(self, text: str, voice_id: str, speed: float, audio_bytes: bytes, mode: str = "local", ext: str = "wav") -> Path:
-        key = self._generate_key(text, voice_id, speed, mode=mode)
+    def put(self, text: str, voice_id: str, speed: float, audio_bytes: bytes, mode: str = "local", ext: str = "wav", model: str = "") -> Path:
+        key = self._generate_key(text, voice_id, speed, mode=mode, model=model)
         cache_path = self.cache_dir / f"{key}.{ext}"
 
         # Check size before writing

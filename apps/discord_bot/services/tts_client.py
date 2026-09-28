@@ -96,7 +96,8 @@ class TTSClient:
         text: str,
         voice_id: str = "female_default",
         speed: float = 1.0,
-        mode: str = "local"
+        mode: str = "local",
+        model: Optional[str] = None
     ) -> Path:
         """
         Synthesizes speech or retrieves it from cache.
@@ -115,17 +116,17 @@ class TTSClient:
                 effective_speed = settings.WAVESPEED_DEFAULT_SPEED
 
         # 1. Check audio cache first
-        cached_file = audio_cache.get(text, voice_id, effective_speed, mode=mode)
+        cached_file = audio_cache.get(text, voice_id, effective_speed, mode=mode, model=model or "")
         if cached_file:
-            logger.info("Audio cache hit for '%s' (mode=%s, %s, x%.2f)", text[:20], mode, voice_id, effective_speed)
+            logger.info("Audio cache hit for '%s' (mode=%s, model=%s, %s, x%.2f)", text[:20], mode, model or "default", voice_id, effective_speed)
             return cached_file
 
         # 2. Synthesize based on mode
         if mode in ["wavespeed", "cloud"]:
             try:
                 from apps.discord_bot.services.cloud_tts_client import cloud_tts_client
-                audio_bytes, ext = await cloud_tts_client.synthesize(text, voice_id=voice_id, speed=effective_speed)
-                saved_path = audio_cache.put(text, voice_id, effective_speed, audio_bytes, mode=mode, ext=ext)
+                audio_bytes, ext = await cloud_tts_client.synthesize(text, voice_id=voice_id, speed=effective_speed, model=model)
+                saved_path = audio_cache.put(text, voice_id, effective_speed, audio_bytes, mode=mode, ext=ext, model=model or "")
                 return saved_path
             except Exception as e:
                 if settings.ENABLE_LOCAL_TTS:

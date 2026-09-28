@@ -63,6 +63,10 @@ class DatabaseManager:
             except Exception:
                 pass
             try:
+                await db.execute("ALTER TABLE guild_settings ADD COLUMN wavespeed_model TEXT")
+            except Exception:
+                pass
+            try:
                 await db.execute("""
                 CREATE TABLE IF NOT EXISTS guild_whitelist (
                     guild_id TEXT NOT NULL,
@@ -106,7 +110,7 @@ class DatabaseManager:
         async with aiosqlite.connect(self.db_path) as db:
             db.row_factory = aiosqlite.Row
             cursor = await db.execute(
-                "SELECT active_text_channel_id, active_voice_channel_id, is_active, max_chars, tts_mode, wavespeed_voice_id FROM guild_settings WHERE guild_id = ?",
+                "SELECT active_text_channel_id, active_voice_channel_id, is_active, max_chars, tts_mode, wavespeed_voice_id, wavespeed_model FROM guild_settings WHERE guild_id = ?",
                 (str(guild_id),)
             )
             row = await cursor.fetchone()
@@ -116,6 +120,8 @@ class DatabaseManager:
                     res["tts_mode"] = settings.DEFAULT_TTS_MODE
                 if not res.get("wavespeed_voice_id"):
                     res["wavespeed_voice_id"] = settings.WAVESPEED_VOICE_ID
+                if not res.get("wavespeed_model"):
+                    res["wavespeed_model"] = settings.WAVESPEED_MODEL
                 return res
             return {
                 "active_text_channel_id": None,
@@ -123,7 +129,8 @@ class DatabaseManager:
                 "is_active": 0,
                 "max_chars": settings.MAX_TEXT_LENGTH,
                 "tts_mode": settings.DEFAULT_TTS_MODE,
-                "wavespeed_voice_id": settings.WAVESPEED_VOICE_ID
+                "wavespeed_voice_id": settings.WAVESPEED_VOICE_ID,
+                "wavespeed_model": settings.WAVESPEED_MODEL
             }
 
     async def get_guild_wavespeed_voice(self, guild_id: str) -> str:
@@ -142,6 +149,25 @@ class DatabaseManager:
                     updated_at = CURRENT_TIMESTAMP
                 """,
                 (str(guild_id), clean_voice_id)
+            )
+            await db.commit()
+
+    async def get_guild_wavespeed_model(self, guild_id: str) -> str:
+        settings_dict = await self.get_guild_settings(guild_id)
+        return settings_dict.get("wavespeed_model") or settings.WAVESPEED_MODEL
+
+    async def set_guild_wavespeed_model(self, guild_id: str, model_id: str):
+        clean_model = model_id.strip()
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                """
+                INSERT INTO guild_settings (guild_id, wavespeed_model, updated_at)
+                VALUES (?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(guild_id) DO UPDATE SET
+                    wavespeed_model = excluded.wavespeed_model,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (str(guild_id), clean_model)
             )
             await db.commit()
 

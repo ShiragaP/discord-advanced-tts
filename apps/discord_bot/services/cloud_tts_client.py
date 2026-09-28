@@ -41,7 +41,8 @@ class CloudTTSClient:
         self,
         text: str,
         voice_id: Optional[str] = None,
-        speed: float = 1.0
+        speed: float = 1.0,
+        model: Optional[str] = None
     ) -> Tuple[bytes, str]:
         """
         Synthesizes text using configured Cloud providers.
@@ -66,8 +67,9 @@ class CloudTTSClient:
             last_err = None
             for key in shuffled_keys:
                 try:
-                    logger.info("Attempting Cloud TTS via WaveSpeed (key ...%s, speed=%.2f)", key[-6:], speed)
-                    audio_bytes = await self._synthesize_wavespeed(text, key, voice_id=voice_id)
+                    target_model = model or settings.WAVESPEED_MODEL
+                    logger.info("Attempting Cloud TTS via WaveSpeed (model=%s, key ...%s, speed=%.2f)", target_model, key[-6:], speed)
+                    audio_bytes = await self._synthesize_wavespeed(text, key, voice_id=voice_id, model=model)
                     audio_bytes = await self._adjust_speed(audio_bytes, speed)
                     return audio_bytes, "mp3"
                 except Exception as e:
@@ -127,7 +129,7 @@ class CloudTTSClient:
 
         return audio_bytes
 
-    async def _synthesize_wavespeed(self, text: str, api_key: str, voice_id: Optional[str] = None) -> bytes:
+    async def _synthesize_wavespeed(self, text: str, api_key: str, voice_id: Optional[str] = None, model: Optional[str] = None) -> bytes:
         session = await self.get_session()
         local_presets = {"female_default", "female_fast", "male_default", "vachana_female", "vachana_male", "pythaitts_default"}
         if not voice_id or voice_id in local_presets:
@@ -135,7 +137,8 @@ class CloudTTSClient:
         else:
             target_voice = voice_id
 
-        url = f"https://api.wavespeed.ai/api/v3/{settings.WAVESPEED_MODEL}"
+        target_model = model or settings.WAVESPEED_MODEL
+        url = f"https://api.wavespeed.ai/api/v3/{target_model}"
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
