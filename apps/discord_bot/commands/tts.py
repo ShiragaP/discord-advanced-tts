@@ -172,7 +172,7 @@ class TTSCommands(commands.Cog):
             whitelist_str = ", ".join(f"'{k}'" for k in whitelist)
             guild_voice = await db_manager.get_guild_wavespeed_voice(str(interaction.guild_id))
             desc = (
-                f"☁️ เปลี่ยนโหมดเป็น **WaveSpeed (ElevenLabs v3)** เรียบร้อยแล้ว!\n"
+                f"☁️ เปลี่ยนโหมดเป็น **WaveSpeed AI ({settings.WAVESPEED_MODEL})** เรียบร้อยแล้ว!\n"
                 f"• โมเดล: `{settings.WAVESPEED_MODEL}`\n"
                 f"• Active API Keys: `{wavespeed_count}` keys (สุ่มคีย์อัตโนมัติทุกครั้ง)\n"
                 f"• Voice ID ปัจจุบัน: `{guild_voice}` (เปลี่ยนได้ด้วย `/wavespeed_voice`)\n"

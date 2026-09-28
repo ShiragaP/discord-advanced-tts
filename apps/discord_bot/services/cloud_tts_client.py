@@ -21,7 +21,16 @@ class CloudTTSClient:
 
     async def get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
-            self._session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=45.0))
+            connector = aiohttp.TCPConnector(
+                limit=30,
+                keepalive_timeout=60.0,
+                ttl_dns_cache=300,
+                enable_cleanup_closed=True
+            )
+            self._session = aiohttp.ClientSession(
+                connector=connector,
+                timeout=aiohttp.ClientTimeout(total=45.0)
+            )
         return self._session
 
     async def close(self):
@@ -142,10 +151,11 @@ class CloudTTSClient:
             "voice_id": target_voice,
             "similarity": 0.75,
             "stability": 0.5,
-            "use_speaker_boost": True
+            "use_speaker_boost": True,
+            "enable_sync_mode": True
         }
 
-        # 1. Submit prediction
+        # 1. Submit prediction with synchronous mode
         async with session.post(url, json=payload, headers=headers) as resp:
             if resp.status != 200:
                 body = await resp.text()
@@ -153,31 +163,36 @@ class CloudTTSClient:
             result_json = await resp.json()
 
         data = result_json.get("data", {})
-        get_url = data.get("urls", {}).get("get")
-        if not get_url:
-            raise RuntimeError(f"WaveSpeed response missing polling url: {result_json}")
-
-        # 2. Poll for completion (usually finishes in ~1-2 seconds)
-        for _ in range(25):
-            await asyncio.sleep(0.8)
-            async with session.get(get_url, headers=headers) as poll_resp:
-                if poll_resp.status != 200:
-                    continue
-                poll_json = await poll_resp.json()
-                poll_data = poll_json.get("data", {})
-                status = poll_data.get("status")
-
-                if status == "completed":
-                    outputs = poll_data.get("outputs", [])
-                    if not outputs:
-                        raise RuntimeError("WaveSpeed completed but returned empty outputs")
-                    audio_url = outputs[0]
-                    break
-                elif status in ["failed", "error"]:
-                    err_msg = poll_data.get("error", "Unknown error")
-                    raise RuntimeError(f"WaveSpeed prediction failed: {err_msg}")
+        
+        # Check if generation already completed synchronously (saves 1.5 - 2.5s of polling!)
+        if data.get("status") == "completed" and data.get("outputs"):
+            audio_url = data["outputs"][0]
         else:
-            raise TimeoutError("WaveSpeed prediction timed out after 20 seconds")
+            get_url = data.get("urls", {}).get("get")
+            if not get_url:
+                raise RuntimeError(f"WaveSpeed response missing polling url: {result_json}")
+
+            # 2. Fast poll for completion if sync didn't finish immediately (every 200ms)
+            for _ in range(35):
+                await asyncio.sleep(0.2)
+                async with session.get(get_url, headers=headers) as poll_resp:
+                    if poll_resp.status != 200:
+                        continue
+                    poll_json = await poll_resp.json()
+                    poll_data = poll_json.get("data", {})
+                    status = poll_data.get("status")
+
+                    if status == "completed":
+                        outputs = poll_data.get("outputs", [])
+                        if not outputs:
+                            raise RuntimeError("WaveSpeed completed but returned empty outputs")
+                        audio_url = outputs[0]
+                        break
+                    elif status in ["failed", "error"]:
+                        err_msg = poll_data.get("error", "Unknown error")
+                        raise RuntimeError(f"WaveSpeed prediction failed: {err_msg}")
+            else:
+                raise TimeoutError("WaveSpeed prediction timed out after 10 seconds")
 
         # 3. Download audio file
         async with session.get(audio_url) as audio_resp:

@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     
     # Cloud TTS Providers (WaveSpeed / ElevenLabs)
     WAVESPEED_API_KEYS: str = ""
-    WAVESPEED_MODEL: str = "elevenlabs/eleven-v3"
+    WAVESPEED_MODEL: str = "elevenlabs/turbo-v2.5"
     WAVESPEED_VOICE_ID: str = "zGjIP4SZlMnY9m93k97r"
     WAVESPEED_DEFAULT_SPEED: float = 0.8
     WAVESPEED_WHITELIST: str = "peony,shiraga,misu,touru"
