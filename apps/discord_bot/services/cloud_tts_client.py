@@ -8,6 +8,7 @@ import asyncio
 import logging
 import os
 import random
+import re
 import shutil
 from typing import Tuple, Optional, List
 from shared.config import settings
@@ -149,6 +150,9 @@ class CloudTTSClient:
         if prompt_text and not prompt_text.endswith((".", "!", "?", "…", "...", "~")):
             prompt_text = f"{prompt_text} ..."
 
+        # Check if text contains Thai characters to enforce Thai pronunciation
+        has_thai = bool(re.search(r"[\u0e00-\u0e7f]", text))
+
         payload = {
             "text": prompt_text,
             "voice_id": target_voice,
@@ -157,6 +161,8 @@ class CloudTTSClient:
             "use_speaker_boost": True,
             "enable_sync_mode": True
         }
+        if has_thai:
+            payload["language_code"] = "th"
 
         # 1. Submit prediction with synchronous mode
         async with session.post(url, json=payload, headers=headers) as resp:

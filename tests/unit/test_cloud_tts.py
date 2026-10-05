@@ -48,3 +48,15 @@ async def test_cloud_tts_adjust_speed_noop_for_1_0():
     dummy_audio = b"dummy_mp3_data"
     result = await client._adjust_speed(dummy_audio, 1.0)
     assert result == dummy_audio
+
+
+def test_thai_language_code_detection():
+    import re
+    # Thai detection logic
+    thai_text = "สวัสดีครับ"
+    english_text = "Hello world"
+    mixed_text = "Hello ครับ"
+
+    assert bool(re.search(r"[\u0e00-\u0e7f]", thai_text)) is True
+    assert bool(re.search(r"[\u0e00-\u0e7f]", english_text)) is False
+    assert bool(re.search(r"[\u0e00-\u0e7f]", mixed_text)) is True
