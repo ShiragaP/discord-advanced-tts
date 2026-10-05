@@ -240,9 +240,10 @@ async def prefix_wavespeed_model(ctx: commands.Context, model_id: str = None):
         await ctx.send(
             f"🧠 **WaveSpeed Model ปัจจุบัน:** `{current_model}`\n\n"
             f"โมเดลที่แนะนำ:\n"
-            f"• `!wavespeed_model elevenlabs/turbo-v2.5` (⚡ เร็วที่สุด ~1.4s, Latency ต่ำ)\n"
+            f"• `!wavespeed_model elevenlabs/turbo-v2.5` (⚡ เร็วที่สุด ~1.4s, Latency ต่ำ แนะนำ)\n"
+            f"• `!wavespeed_model elevenlabs/eleven-v4` (🎭 รุ่นใหม่ล่าสุด! Emotion tags อารมณ์สมจริง)\n"
             f"• `!wavespeed_model elevenlabs/multilingual-v2` (🌐 เสถียร มาตรฐาน ~1.8s)\n"
-            f"• `!wavespeed_model elevenlabs/eleven-v3` (🎙️ คุณภาพสตูดิโอสูงสุด ~2.5s)"
+            f"• `!wavespeed_model elevenlabs/eleven-v3` (🎙️ คุณภาพสตูดิโอ)"
         )
         return
 
@@ -252,6 +253,8 @@ async def prefix_wavespeed_model(ctx: commands.Context, model_id: str = None):
         "turbo-v2.5": "elevenlabs/turbo-v2.5",
         "turbo2.5": "elevenlabs/turbo-v2.5",
         "v2.5": "elevenlabs/turbo-v2.5",
+        "v4": "elevenlabs/eleven-v4",
+        "eleven-v4": "elevenlabs/eleven-v4",
         "multilingual": "elevenlabs/multilingual-v2",
         "v2": "elevenlabs/multilingual-v2",
         "multilingual-v2": "elevenlabs/multilingual-v2",

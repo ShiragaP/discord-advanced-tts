@@ -210,8 +210,9 @@ class TTSCommands(commands.Cog):
     )
     @app_commands.choices(model=[
         app_commands.Choice(name="Turbo v2.5 (เร็วที่สุด ~1.4s, Latency ต่ำ แนะนำ)", value="elevenlabs/turbo-v2.5"),
+        app_commands.Choice(name="Eleven v4 (รุ่นใหม่ล่าสุด! แสดงอารมณ์และ Emotion tags ดีที่สุด)", value="elevenlabs/eleven-v4"),
         app_commands.Choice(name="Multilingual v2 (มาตรฐาน เสถียร ~1.8s)", value="elevenlabs/multilingual-v2"),
-        app_commands.Choice(name="Eleven v3 (คุณภาพสตูดิโอสูงสุด ~2.5s)", value="elevenlabs/eleven-v3"),
+        app_commands.Choice(name="Eleven v3 (คุณภาพสตูดิโอ)", value="elevenlabs/eleven-v3"),
     ])
     async def wavespeed_model(self, interaction: discord.Interaction, model: app_commands.Choice[str]):
         await interaction.response.defer()
